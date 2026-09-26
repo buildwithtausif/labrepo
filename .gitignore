@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.agents/
+.astro/
+.vscode/
+certbot/
+.github/prompts/*
+server/data
+*.tar
