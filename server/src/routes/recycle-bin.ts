@@ -1,13 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { getDb } from '../db/runtime.js';
 import { recycleBin, academicSessions, subjects, works, files } from '../db/schema.js';
-import type { StorageAdapter } from '../storage/adapter.js';
+import type { StorageResolverFn } from './files.js';
 import { updateUserUsage } from '../services/usage.service.js';
 import { eq, and, lte, sql } from 'drizzle-orm';
 import type { Database } from '../db/runtime.js';
 import { requireNotSuspended } from '../auth/suspension.js';
 
-export function createRecycleBinRoutes(storage: StorageAdapter) {
+export function createRecycleBinRoutes(resolveStorage: StorageResolverFn) {
   return async function recycleBinRoutes(fastify: FastifyInstance): Promise<void> {
     // List recycle bin items
     fastify.get('/api/recycle-bin', async (request) => {
@@ -133,9 +133,20 @@ export function createRecycleBinRoutes(storage: StorageAdapter) {
         let storageDelta = 0;
         let fileDelta = 0;
 
+        let storage;
+        try {
+          storage = await resolveStorage(request.userId);
+        } catch {
+          // If storage can't be resolved (e.g. Drive disconnected), still allow
+          // permanent delete from DB — the files are already orphaned.
+          storage = null;
+        }
+
         for (const file of filesToDelete) {
           try {
-            await storage.delete(file.storageKey || file.storage_key);
+            if (storage) {
+              await storage.delete(file.storageKey || file.storage_key);
+            }
             storageDelta -= (file.sizeBytes || file.size_bytes || 0);
             fileDelta -= 1;
           } catch (error) {

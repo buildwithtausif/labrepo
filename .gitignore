@@ -1,6 +1,5 @@
 node_modules/
-dist/
-.env
+*.env
 .agents/
 .astro/
 .vscode/
@@ -8,3 +7,4 @@ certbot/
 .github/prompts/*
 server/data
 *.tar
+dist/

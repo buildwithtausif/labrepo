@@ -15,6 +15,9 @@ import { searchRoutes } from './routes/search.js';
 import { publicRoutes } from './routes/public.js';
 import { startCleanupJob } from './jobs/cleanup.js';
 import { getSecurityConfig } from './services/config.service.js';
+import type { StorageAdapter } from './storage/adapter.js';
+import { requireGDriveAdapter, getGDriveAdapterForUser } from './storage/resolver.js';
+import { gdriveAuthRoutes } from './routes/gdrive-auth.js';
 
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 const HOST = process.env.API_HOST || '0.0.0.0';
@@ -34,24 +37,41 @@ function getCorsOrigins(): string[] {
   ];
 }
 
+/**
+ * Resolve the storage adapter for a given request.
+ *
+ * For gdrive mode: creates a per-user adapter from their stored OAuth tokens.
+ * For mock/s3 mode: returns the shared global adapter.
+ */
+async function resolveStorage(
+  storageDriver: string,
+  fallbackStorage: StorageAdapter,
+  userId: string
+): Promise<StorageAdapter> {
+  if (storageDriver === 'gdrive') {
+    return requireGDriveAdapter(userId);
+  }
+  return fallbackStorage;
+}
+
 async function start() {
   // Initialize database (runs migrations — blocks if they fail)
   await initDatabase();
   console.log('[server] Database initialized (PostgreSQL + Drizzle ORM)');
 
-  // Initialize storage adapter based on environment variable
+  // Initialize fallback storage adapter (mock/s3 — used for non-gdrive modes and admin assets)
   const storageDriver = process.env.STORAGE_DRIVER || 'mock';
-  let storage;
-  
+  let fallbackStorage: StorageAdapter;
+
   if (storageDriver === 'minio' || storageDriver === 's3') {
     const { S3Adapter } = await import('./storage/s3.js');
     const s3Adapter = new S3Adapter();
     await s3Adapter.initBucket();
-    storage = s3Adapter;
+    fallbackStorage = s3Adapter;
     console.log(`[server] Storage adapter initialized (${storageDriver === 'minio' ? 'MinIO' : 'AWS S3'})`);
   } else {
-    storage = new MockS3Adapter();
-    console.log('[server] Storage adapter initialized (MockS3)');
+    fallbackStorage = new MockS3Adapter();
+    console.log(`[server] Storage adapter initialized (${storageDriver === 'gdrive' ? 'MockS3 fallback — GDrive is per-user' : 'MockS3'})`);
   }
 
   // Create Fastify instance
@@ -90,14 +110,14 @@ async function start() {
   // Health check (no auth required)
   fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
 
-  // Public proxy for storage (e.g. for SEO OG images)
+  // Public proxy for storage (admin-owned assets like OG images — uses fallback storage)
   fastify.get<{ Params: { '*': string } }>('/api/public/storage/*', async (request, reply) => {
     const key = request.params['*'];
     if (!key || key.includes('..')) {
       return reply.status(400).send({ error: 'Invalid path' });
     }
     try {
-      const { data, contentType } = await storage.download(key);
+      const { data, contentType } = await fallbackStorage.download(key);
       return reply.header('Content-Type', contentType).send(data);
     } catch (err) {
       return reply.status(404).send({ error: 'Not found' });
@@ -110,23 +130,31 @@ async function start() {
   // Register auth plugin (all routes below require authentication)
   await fastify.register(clerkAuth);
 
+  // Google Drive OAuth2 connect/disconnect routes
+  await fastify.register(gdriveAuthRoutes);
+
   // Register routes
   await fastify.register(userRoutes);
   await fastify.register(sessionRoutes);
   await fastify.register(subjectRoutes);
   await fastify.register(workRoutes);
-  await fastify.register(createFileRoutes(storage));
-  await fastify.register(createDownloadRoutes(storage));
-  await fastify.register(createRecycleBinRoutes(storage));
+
+  // Storage-dependent routes: pass a resolver function instead of a fixed adapter
+  const storageResolver = (userId: string) =>
+    resolveStorage(storageDriver, fallbackStorage, userId);
+
+  await fastify.register(createFileRoutes(storageResolver));
+  await fastify.register(createDownloadRoutes(storageResolver));
+  await fastify.register(createRecycleBinRoutes(storageResolver));
   
 
   await fastify.register(searchRoutes);
   
   const { createAdminRoutes } = await import('./routes/admin.js');
-  await fastify.register(createAdminRoutes(storage));
+  await fastify.register(createAdminRoutes(storageResolver, fallbackStorage));
 
-  // Start cleanup job
-  startCleanupJob(storage);
+  // Start cleanup job (uses per-user resolution internally)
+  startCleanupJob(storageDriver, fallbackStorage);
   console.log('[server] Cleanup job started');
 
   // Graceful shutdown

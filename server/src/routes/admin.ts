@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { StorageAdapter } from '../storage/adapter.js';
+import type { StorageResolverFn } from './files.js';
 import { getDb } from '../db/runtime.js';
 import { users, abuseFlags, auditLogs, userUsageStats, academicSessions, siteSettings, files, works, subjects, recycleBin, dailyUsageHistory, announcements } from '../db/schema.js';
 import { writeAuditLog } from '../services/audit.service.js';
@@ -18,7 +19,7 @@ async function isAdminUser(userId: string): Promise<boolean> {
   }
 }
 
-export function createAdminRoutes(storage: StorageAdapter) {
+export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackStorage: StorageAdapter) {
   return async function adminRoutes(fastify: FastifyInstance): Promise<void> {
     fastify.addHook('preHandler', async (request, reply) => {
       const isAdmin = await isAdminUser(request.userId);
@@ -263,6 +264,7 @@ export function createAdminRoutes(storage: StorageAdapter) {
     for (const f of userFiles) {
       if (f.storageKey) {
         try {
+          const storage = await resolveStorage(userId);
           await storage.delete(f.storageKey);
         } catch (e) {
           console.error(`Failed to physically delete file ${f.storageKey}:`, e);
@@ -435,7 +437,7 @@ export function createAdminRoutes(storage: StorageAdapter) {
             return { success: false, error: 'Image processing failed: ' + (err?.message || 'Unknown error') };
           }
           
-          if (storage) {
+          if (fallbackStorage) {
             const db = getDb();
             const fullKey = 'seo.image';
 
@@ -446,7 +448,7 @@ export function createAdminRoutes(storage: StorageAdapter) {
                 // Extract the storage key from the URL: "/api/public/storage/public/seo/og-image-xxx.webp" -> "public/seo/og-image-xxx.webp"
                 const oldKey = existing.value.replace('/api/public/storage/', '');
                 if (oldKey && oldKey.startsWith('public/seo/')) {
-                  await storage.delete(oldKey);
+                  await fallbackStorage.delete(oldKey);
                   console.log(`Deleted old OG image: ${oldKey}`);
                 }
               }
@@ -456,7 +458,7 @@ export function createAdminRoutes(storage: StorageAdapter) {
 
             // Upload the new image
             const key = `public/seo/og-image-${Date.now()}.${extension}`;
-            await storage.upload(key, processedData, mimetype);
+            await fallbackStorage.upload(key, processedData, mimetype);
             ogImageUrl = `/api/public/storage/${key}`;
             
             // Upsert the setting

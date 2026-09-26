@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { getDb } from '../db/runtime.js';
 import { files, works, subjects, academicSessions, recycleBin } from '../db/schema.js';
-import type { StorageAdapter } from '../storage/adapter.js';
 import { buildStorageKey } from '../storage/adapter.js';
 import { validateUploadCandidate } from '../services/validation.service.js';
 import { writeAuditLog } from '../services/audit.service.js';
@@ -58,7 +57,9 @@ function getContentType(ext: string): string {
   return types[ext] || 'application/octet-stream';
 }
 
-export function createFileRoutes(storage: StorageAdapter) {
+export type StorageResolverFn = (userId: string) => Promise<import('../storage/adapter.js').StorageAdapter>;
+
+export function createFileRoutes(resolveStorage: StorageResolverFn) {
   return async function fileRoutes(fastify: FastifyInstance): Promise<void> {
     // Upload files to a work
     fastify.post<{ Params: { workId: string } }>(
@@ -169,6 +170,7 @@ export function createFileRoutes(storage: StorageAdapter) {
             });
           }
 
+          const storage = await resolveStorage(request.userId);
           await storage.upload(storageKey, finalData, finalMime);
 
           await writeAuditLog({
@@ -270,6 +272,7 @@ export function createFileRoutes(storage: StorageAdapter) {
         return reply.status(404).send({ error: 'File not found' });
       }
 
+      const storage = await resolveStorage(request.userId);
       const { data, contentType } = await storage.download(file.storageKey);
 
       return reply
@@ -299,6 +302,7 @@ export function createFileRoutes(storage: StorageAdapter) {
         });
       }
 
+      const storage = await resolveStorage(request.userId);
       const { data } = await storage.download(file.storageKey);
       const content = data.toString('utf-8');
 

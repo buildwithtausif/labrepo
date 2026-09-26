@@ -1,7 +1,20 @@
 /**
  * StorageAdapter — abstraction over file storage backends.
- * Implementations: MockS3Adapter (dev), S3Adapter (production).
+ * Implementations: MockS3Adapter (dev), S3Adapter (production), GoogleDriveStorageAdapter (production).
  */
+export interface StorageMetrics {
+  /** Total storage capacity in bytes */
+  totalBytes: number;
+  /** Total storage used across the storage backend in bytes */
+  usedBytes: number;
+  /** Available vacant space remaining in bytes */
+  vacantBytes: number;
+  /** Space utilized specifically by this LabRepo instance in bytes */
+  instanceUsedBytes: number;
+  /** Computed storage quota allocated per user in bytes */
+  allocatedPerUserBytes: number;
+}
+
 export interface StorageAdapter {
   /** Upload a file to storage */
   upload(key: string, data: Buffer, contentType: string): Promise<void>;
@@ -17,6 +30,9 @@ export interface StorageAdapter {
 
   /** List all keys under a prefix */
   list(prefix: string): Promise<string[]>;
+
+  /** Optional: get storage metrics and per-user dynamic allocation */
+  getStorageMetrics?(userCount?: number): Promise<StorageMetrics>;
 }
 
 /**

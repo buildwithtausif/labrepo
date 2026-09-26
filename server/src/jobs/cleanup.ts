@@ -1,6 +1,7 @@
 import { getDb } from '../db/runtime.js';
 import { recycleBin, academicSessions, subjects, works, files } from '../db/schema.js';
 import type { StorageAdapter } from '../storage/adapter.js';
+import { getGDriveAdapterForUser } from '../storage/resolver.js';
 import { eq, lte, and, sql } from 'drizzle-orm';
 import { updateUserUsage } from '../services/usage.service.js';
 
@@ -9,17 +10,28 @@ import { updateUserUsage } from '../services/usage.service.js';
  * 1. Permanently delete expired recycle bin items (7 days)
  * 2. Auto-delete academic sessions past their auto_delete_date
  */
-export function startCleanupJob(storage: StorageAdapter): void {
+export function startCleanupJob(storageDriver: string, fallbackStorage: StorageAdapter): void {
   // Run immediately on startup
-  runCleanup(storage).catch(console.error);
+  runCleanup(storageDriver, fallbackStorage).catch(console.error);
 
   // Then run every hour
   setInterval(() => {
-    runCleanup(storage).catch(console.error);
+    runCleanup(storageDriver, fallbackStorage).catch(console.error);
   }, 60 * 60 * 1000);
 }
 
-async function runCleanup(storage: StorageAdapter): Promise<void> {
+async function resolveStorageForUser(
+  storageDriver: string,
+  fallbackStorage: StorageAdapter,
+  userId: string
+): Promise<StorageAdapter | null> {
+  if (storageDriver === 'gdrive') {
+    return getGDriveAdapterForUser(userId);
+  }
+  return fallbackStorage;
+}
+
+async function runCleanup(storageDriver: string, fallbackStorage: StorageAdapter): Promise<void> {
   const db = getDb();
   const now = new Date().toISOString();
 
@@ -43,7 +55,10 @@ async function runCleanup(storage: StorageAdapter): Promise<void> {
 
     for (const file of filesToDelete) {
       try {
-        await storage.delete(file.storage_key || file.storageKey);
+        const storage = await resolveStorageForUser(storageDriver, fallbackStorage, item.userId);
+        if (storage) {
+          await storage.delete(file.storage_key || file.storageKey);
+        }
         storageDelta -= (file.sizeBytes || file.size_bytes || 0);
         fileDelta -= 1;
       } catch (err) {

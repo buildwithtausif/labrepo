@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { getDb } from '../db/runtime.js';
 import { works, subjects, academicSessions, files } from '../db/schema.js';
-import type { StorageAdapter } from '../storage/adapter.js';
+import type { StorageResolverFn } from './files.js';
 import archiver from 'archiver';
 import { eq, and } from 'drizzle-orm';
 
-export function createDownloadRoutes(storage: StorageAdapter) {
+export function createDownloadRoutes(resolveStorage: StorageResolverFn) {
   return async function downloadRoutes(fastify: FastifyInstance): Promise<void> {
     // Download entire work as ZIP
     fastify.get<{ Params: { id: string } }>('/api/download/work/:id', async (request, reply) => {
@@ -39,6 +39,8 @@ export function createDownloadRoutes(storage: StorageAdapter) {
 
       const archive = archiver('zip', { zlib: { level: 5 } });
       reply.raw.on('close', () => archive.destroy());
+
+      const storage = await resolveStorage(request.userId);
 
       for (const file of workFiles) {
         const { data } = await storage.download(file.storageKey);
@@ -75,6 +77,8 @@ export function createDownloadRoutes(storage: StorageAdapter) {
 
       const archive = archiver('zip', { zlib: { level: 5 } });
       reply.raw.on('close', () => archive.destroy());
+
+      const storage = await resolveStorage(request.userId);
 
       for (const work of subjectWorks) {
         const workFiles = await db.select().from(files).where(eq(files.workId, work.id));
@@ -113,6 +117,8 @@ export function createDownloadRoutes(storage: StorageAdapter) {
       const archive = archiver('zip', { zlib: { level: 5 } });
       reply.raw.on('close', () => archive.destroy());
 
+      const storage = await resolveStorage(request.userId);
+
       for (const subject of sessionSubjects) {
         const subjectWorks = await db.select().from(works).where(eq(works.subjectId, subject.id));
         for (const work of subjectWorks) {
@@ -144,6 +150,8 @@ export function createDownloadRoutes(storage: StorageAdapter) {
 
       const archive = archiver('zip', { zlib: { level: 5 } });
       reply.raw.on('close', () => archive.destroy());
+
+      const storage = await resolveStorage(request.userId);
 
       for (const session of sessions) {
         const sessionSubjects = await db.select().from(subjects).where(eq(subjects.sessionId, session.id));

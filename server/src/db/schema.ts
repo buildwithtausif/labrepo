@@ -19,9 +19,13 @@ export const users = pgTable('users', {
   uploadsSuspended: integer('uploads_suspended').notNull().default(0),
   suspensionReason: text('suspension_reason'),
   allowedExtensions: text('allowed_extensions'),
+  gdriveRefreshToken: text('gdrive_refresh_token'),
+  gdriveConnectedAt: text('gdrive_connected_at'),
+  gdriveEmail: text('gdrive_email'),
   createdAt: text('created_at').notNull().default(nowIso),
   updatedAt: text('updated_at').notNull().default(nowIso),
 });
+
 
 // ─── Academic Sessions ────────────────────────────────
 export const academicSessions = pgTable(
