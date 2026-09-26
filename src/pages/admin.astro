@@ -1,0 +1,1399 @@
+---
+import Layout from '../Layouts/Layout.astro';
+import { Show } from '@clerk/astro/components';
+import { defaultSEO } from '../utils/seo';
+
+const isDevBypass = process.env.ENV === 'development';
+
+if (!isDevBypass) {
+  const user = await Astro.locals.currentUser();
+  if (!user) {
+    return Astro.redirect('/');
+  }
+
+  // Strict role check
+  if (
+    user.publicMetadata?.role !== 'admin' &&
+    user.id !== process.env.ADMIN_USER_ID &&
+    user.id !== process.env.CLERK_ADMIN_USER_ID
+  ) {
+    return Astro.redirect('/');
+  }
+}
+
+const siteUrl = typeof process !== 'undefined' && process.env.PUBLIC_SITE_URL ? process.env.PUBLIC_SITE_URL : Astro.url.origin;
+const displayUrl = siteUrl.replace(/^https?:\/\//, '');
+---
+
+<Layout title="Admin" showNav={true}>
+  <Show when="signed-out">
+    <div class="container py-12">
+      <div class="admin-card admin-card--hero max-w-xl mx-auto">
+        <div class="admin-card__icon-badge">
+          <i class="bi bi-shield-lock"></i>
+        </div>
+        <h1 class="text-display-lg">Admin access required</h1>
+        <p class="text-lead text-muted mt-2">Please sign in with an authorized account to view this moderation panel.</p>
+      </div>
+    </div>
+  </Show>
+
+  <Show when="signed-in">
+    <div class="container page-content">
+      <!-- Loading state -->
+      <div id="admin-loading" class="empty-state">
+        <div class="spinner"></div>
+        <p class="text-muted">Loading admin panel...</p>
+      </div>
+
+      <!-- Access denied state -->
+      <div id="admin-denied" class="empty-state" style="display: none;">
+        <div class="text-hero text-muted mb-4"><i class="bi bi-shield-x"></i></div>
+        <h3 class="text-display-lg mb-2">Access denied</h3>
+        <p class="text-lead text-muted">Your account doesn't have admin privileges.</p>
+      </div>
+
+      <!-- Main admin content -->
+      <div id="admin-content" style="display: none;">
+        <!-- Page header -->
+        <div class="page-header flex items-center justify-between mb-8">
+          <div>
+            <p class="admin-kicker">Moderation console</p>
+            <h1 class="text-display-lg">Admin panel</h1>
+            <p class="text-muted mt-1">Review metrics, manage users, and moderate abuse flags.</p>
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            <a href="/security-and-moderation" class="btn btn--dark-utility">
+              <i class="bi bi-shield-check"></i><span class="hide-mobile"> Security &amp; moderation</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Tab navigation -->
+        <div class="admin-tabs mb-8">
+          <button class="admin-tab active" data-tab="overview"><i class="bi bi-speedometer2"></i> Overview</button>
+          <button class="admin-tab" data-tab="announcements"><i class="bi bi-megaphone"></i> Announcements</button>
+          <button class="admin-tab" data-tab="users"><i class="bi bi-people"></i> Users</button>
+          <button class="admin-tab" data-tab="seo"><i class="bi bi-gear"></i> Settings</button>
+          <button class="admin-tab" data-tab="learn"><i class="bi bi-book"></i> Learn</button>
+        </div>
+
+        <!-- ===== OVERVIEW TAB ===== -->
+        <div id="tab-overview" class="admin-tab-content">
+          <!-- Summary stats -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div class="admin-stat-card">
+              <div class="admin-stat-card__icon"><i class="bi bi-people"></i></div>
+              <div>
+                <p class="text-caption text-muted">Registered users</p>
+                <p class="admin-stat-card__value" id="user-count">—</p>
+              </div>
+            </div>
+            <div class="admin-stat-card">
+              <div class="admin-stat-card__icon admin-stat-card__icon--warning"><i class="bi bi-flag"></i></div>
+              <div>
+                <p class="text-caption text-muted">Open abuse flags</p>
+                <p class="admin-stat-card__value" id="flag-count">—</p>
+              </div>
+            </div>
+            <div class="admin-stat-card">
+              <div class="admin-stat-card__icon admin-stat-card__icon--info"><i class="bi bi-journal-text"></i></div>
+              <div>
+                <p class="text-caption text-muted">Audit log entries</p>
+                <p class="admin-stat-card__value" id="audit-count">—</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Extended stats row -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+            <div class="admin-stat-card admin-stat-card--compact">
+              <i class="bi bi-hdd text-muted"></i>
+              <div>
+                <p class="text-caption text-muted">Total storage</p>
+                <p class="admin-stat-card__value admin-stat-card__value--sm" id="storage-used">—</p>
+              </div>
+            </div>
+            <div class="admin-stat-card admin-stat-card--compact">
+              <i class="bi bi-cloud-upload text-muted"></i>
+              <div>
+                <p class="text-caption text-muted">Total uploads</p>
+                <p class="admin-stat-card__value admin-stat-card__value--sm" id="total-uploads">—</p>
+              </div>
+            </div>
+            <div class="admin-stat-card admin-stat-card--compact">
+              <i class="bi bi-cloud-download text-muted"></i>
+              <div>
+                <p class="text-caption text-muted">Total downloads</p>
+                <p class="admin-stat-card__value admin-stat-card__value--sm" id="total-downloads">—</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lifetime stats row -->
+          <h3 class="text-body-strong" style="margin-top: 2rem; margin-bottom: 1.25rem;">Lifetime System Stats</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div class="admin-stat-card admin-stat-card--compact">
+              <i class="bi bi-people-fill text-muted"></i>
+              <div>
+                <p class="text-caption text-muted">All Registered Users</p>
+                <p class="admin-stat-card__value admin-stat-card__value--sm" id="lifetime-users">—</p>
+              </div>
+            </div>
+            <div class="admin-stat-card admin-stat-card--compact">
+              <i class="bi bi-cloud-arrow-up-fill text-muted"></i>
+              <div>
+                <p class="text-caption text-muted">Lifetime Uploads</p>
+                <p class="admin-stat-card__value admin-stat-card__value--sm" id="lifetime-uploads">—</p>
+              </div>
+            </div>
+            <div class="admin-stat-card admin-stat-card--compact">
+              <i class="bi bi-cloud-arrow-down-fill text-muted"></i>
+              <div>
+                <p class="text-caption text-muted">Lifetime Downloads</p>
+                <p class="admin-stat-card__value admin-stat-card__value--sm" id="lifetime-downloads">—</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Audit + Flags columns -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+            <section class="admin-panel-section">
+              <div class="admin-panel-section__header">
+                <h2 class="text-body-strong"><i class="bi bi-clock-history"></i> Recent audit activity</h2>
+                <span class="text-caption text-muted" id="audit-showing"></span>
+              </div>
+              <ul id="audit-list" class="admin-list" style="max-height: 380px; overflow-y: auto;">
+                <li class="admin-list__placeholder text-muted text-caption">Loading...</li>
+              </ul>
+              <div style="display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--color-divider); background: rgba(255,255,255,.01);">
+                <button id="audit-prev" class="btn btn--sm btn--ghost">Previous</button>
+                <button id="audit-next" class="btn btn--sm btn--ghost">Next</button>
+              </div>
+            </section>
+
+            <section class="admin-panel-section">
+              <div class="admin-panel-section__header">
+                <h2 class="text-body-strong"><i class="bi bi-exclamation-triangle"></i> Open abuse flags</h2>
+                <span class="text-caption text-muted" id="flag-showing"></span>
+              </div>
+              <ul id="flag-list" class="admin-list" style="max-height: 380px; overflow-y: auto;">
+                <li class="admin-list__placeholder text-muted text-caption">Loading...</li>
+              </ul>
+              <div style="display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--color-divider); background: rgba(255,255,255,.01);">
+                <button id="flag-prev" class="btn btn--sm btn--ghost">Previous</button>
+                <button id="flag-next" class="btn btn--sm btn--ghost">Next</button>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- ===== USERS TAB ===== -->
+        
+        <!-- Announcements Tab -->
+        <div id="tab-announcements" class="admin-tab-content" style="display: none;">
+          <div class="flex items-center justify-between flex-wrap gap-3" style="margin-bottom: 2rem;">
+            <h2 class="text-display-lg" style="font-size: clamp(1.2rem, 4vw, 1.6rem); margin: 0;"><i class="bi bi-megaphone text-muted" style="margin-right: 8px;"></i>Announcements</h2>
+            <button class="btn btn--primary btn--sm" id="btn-create-announcement"><i class="bi bi-plus-lg"></i> New</button>
+          </div>
+
+          <div id="announcement-form-container" class="admin-card mb-6" style="display: none; text-align: left; background: linear-gradient(145deg, rgba(255,255,255,0.03), rgba(0,0,0,0.1)); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 8px 32px rgba(0,0,0,0.15); border-radius: var(--radius-lg);">
+            <div class="flex items-center justify-between mb-5">
+              <h3 class="text-body-strong m-0 text-[1.1rem]" id="announcement-form-title">Create Announcement</h3>
+            </div>
+            <form id="announcement-form" class="stack" style="gap: 20px;">
+              <input type="hidden" id="announcement-id" />
+              <div class="form-group">
+                <label class="form-label text-muted text-sm font-medium mb-1">Title <span class="text-danger">*</span></label>
+                <input type="text" id="announcement-title" class="input w-full px-4 py-3 rounded-md border-[rgba(255,255,255,0.1)] focus:border-primary bg-black/40" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label text-muted text-sm font-medium mb-1">Message <span class="text-danger">*</span></label>
+                <textarea id="announcement-message" class="input w-full px-4 py-3 rounded-md border-[rgba(255,255,255,0.1)] focus:border-primary bg-black/40" rows="3" required></textarea>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div class="form-group">
+                  <label class="form-label text-muted text-sm font-medium mb-1">Type</label>
+                  <select id="announcement-type" class="input w-full px-4 py-3 rounded-md border-[rgba(255,255,255,0.1)] focus:border-primary bg-black/40">
+                    <option value="info">Info</option>
+                    <option value="success">Success</option>
+                    <option value="warning">Warning</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label text-muted text-sm font-medium mb-1">Status</label>
+                  <select id="announcement-status" class="input w-full px-4 py-3 rounded-md border-[rgba(255,255,255,0.1)] focus:border-primary bg-black/40">
+                    <option value="1">Active</option>
+                    <option value="0">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div class="form-group">
+                  <label class="form-label text-muted text-sm font-medium mb-1">Action URL (Optional)</label>
+                  <input type="url" id="announcement-url" class="input w-full px-4 py-3 rounded-md border-[rgba(255,255,255,0.1)] focus:border-primary bg-black/40" placeholder="https://..." />
+                </div>
+                <div class="form-group">
+                  <label class="form-label text-muted text-sm font-medium mb-1">Action Label</label>
+                  <input type="text" id="announcement-url-label" class="input w-full px-4 py-3 rounded-md border-[rgba(255,255,255,0.1)] focus:border-primary bg-black/40" placeholder="Learn more" />
+                </div>
+              </div>
+              <div class="flex gap-3 mt-2">
+                <button type="submit" class="btn btn--primary" id="btn-save-announcement" style="padding: 10px 24px;">Save Announcement</button>
+                <button type="button" class="btn btn--ghost" id="btn-cancel-announcement" style="padding: 10px 24px;">Cancel</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="admin-card" style="padding: 0; overflow: hidden; text-align: left; overflow-x: auto;">
+            <div id="announcements-list">
+              <div class="admin-list__placeholder text-muted text-caption">Loading announcements...</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-users" class="admin-tab-content" style="display: none;">
+          <div class="admin-panel-section">
+            <div class="admin-panel-section__header">
+              <h2 class="text-body-strong"><i class="bi bi-people"></i> Registered users</h2>
+              <span class="text-caption text-muted" id="user-list-count"></span>
+            </div>
+            <div id="user-list-loading" class="admin-list__placeholder text-muted text-caption">Loading users...</div>
+            <div id="user-list-container"></div>
+          </div>
+        </div>
+
+        <!-- ===== SETTINGS TAB ===== -->
+        <div id="tab-seo" class="admin-tab-content" style="display: none;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-top: 16px;">
+            
+            <div class="admin-panel-section">
+              <div class="admin-panel-section__header">
+                <h2 class="text-body-strong"><i class="bi bi-file-earmark-code"></i> File Type Settings</h2>
+              </div>
+              <div class="p-5 flex flex-col gap-6">
+                <p class="text-caption text-muted m-0">Append allowed file extensions for all users (comma separated, e.g. <code>png, webp, mp4</code>). These are merged with default environment variables.</p>
+                <form id="config-form" class="flex flex-col gap-6">
+                  <div>
+                    <label for="config-append-files" class="text-caption text-muted block mb-2 font-medium">Global Allowed Extensions</label>
+                    <input type="text" id="config-append-files" name="append_file_types" class="input w-full px-4 py-3 rounded-md" placeholder="mp4, png, webp" />
+                  </div>
+                  <button type="submit" class="btn btn--primary self-start mt-2">Save File Settings</button>
+                </form>
+              </div>
+            </div>
+
+            <div class="admin-panel-section">
+              <div class="admin-panel-section__header">
+                <h2 class="text-body-strong"><i class="bi bi-globe"></i> Global SEO Settings</h2>
+              </div>
+              <div class="p-5">
+                <form id="seo-form" class="flex flex-col gap-6">
+                  <div>
+                    <label for="seo-title" class="text-caption text-muted block mb-2 font-medium">Default Title</label>
+                    <input type="text" id="seo-title" name="title" class="input w-full px-4 py-3 rounded-md" placeholder="e.g. LabRepo - Student Workspace" />
+                  </div>
+                  <div>
+                    <label for="seo-description" class="text-caption text-muted block mb-2 font-medium">Default Description</label>
+                    <textarea id="seo-description" name="description" class="input w-full px-4 py-3 min-h-[120px] resize-y rounded-md" placeholder="Site description for search engines"></textarea>
+                  </div>
+                  <div>
+                    <label for="seo-twitter" class="text-caption text-muted block mb-2 font-medium">Twitter Handle</label>
+                    <input type="text" id="seo-twitter" name="twitterHandle" class="input w-full px-4 py-3 rounded-md" placeholder="@labrepo" />
+                  </div>
+                  <button type="submit" class="btn btn--primary self-start mt-2">Save Settings</button>
+                </form>
+              </div>
+            </div>
+
+            <div class="admin-panel-section">
+              <div class="admin-panel-section__header">
+                <h2 class="text-body-strong"><i class="bi bi-image"></i> Open Graph Image</h2>
+              </div>
+              <div class="p-5 flex flex-col gap-6">
+                <p class="text-caption text-muted m-0">Upload a default social preview image (1200x630px recommended).</p>
+                
+                <div class="og-preview-card border border-divider rounded-xl overflow-hidden bg-surface">
+                  <div class="aspect-video bg-surface-hover relative flex items-center justify-center text-ink-muted" id="og-image-preview">
+                    No image uploaded
+                  </div>
+                  <div class="p-4 border-t border-divider">
+                    <div class="text-caption text-muted whitespace-nowrap overflow-hidden text-ellipsis mb-1" id="og-site-name">{displayUrl}</div>
+                    <div class="text-body-strong whitespace-nowrap overflow-hidden text-ellipsis mb-1" id="og-preview-title">{defaultSEO.title}</div>
+                    <div class="text-caption text-muted line-clamp-2" id="og-preview-desc">{defaultSEO.description}</div>
+                  </div>
+                </div>
+
+                <form id="seo-image-form" class="flex flex-col gap-6">
+                  <div class="flex items-center gap-4 bg-surface p-3 border border-divider rounded-xl">
+                    <label for="seo-image" class="btn btn--dark-utility m-0 whitespace-nowrap cursor-pointer">
+                      <i class="bi bi-folder2-open mr-2"></i> Choose File
+                    </label>
+                    <span id="seo-image-filename" class="text-caption text-muted whitespace-nowrap overflow-hidden text-ellipsis max-w-full">No file chosen</span>
+                    <input type="file" id="seo-image" name="image" accept="image/jpeg, image/png" class="hidden" />
+                  </div>
+                  <button type="submit" class="btn btn--primary self-start">Upload Image</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== LEARN TAB ===== -->
+        <div id="tab-learn" class="admin-tab-content" style="display: none;">
+          <div class="admin-learn-grid">
+            <!-- Abuse Flags -->
+            <div class="admin-learn-card">
+              <div class="admin-learn-card__header">
+                <div class="admin-learn-card__icon"><i class="bi bi-exclamation-triangle"></i></div>
+                <h3>Abuse flags</h3>
+              </div>
+              <p>Abuse flags are <strong>automatically created</strong> by the moderation engine when suspicious patterns are detected. They are never manually created.</p>
+              <div class="admin-learn-card__rules">
+                <div class="admin-learn-rule">
+                  <span class="admin-badge admin-badge--danger">HIGH</span>
+                  <div>
+                    <strong>Upload burst</strong>
+                    <p>Triggered when a user uploads <strong>≥ 50 files within 1 minute</strong>. Indicates potential spam or storage abuse.</p>
+                  </div>
+                </div>
+                <div class="admin-learn-rule">
+                  <span class="admin-badge admin-badge--danger">HIGH</span>
+                  <div>
+                    <strong>Login attack</strong>
+                    <p>Triggered when <strong>≥ 5 failed login attempts</strong> are recorded for a user within 1 hour. Indicates brute-force attempts.</p>
+                  </div>
+                </div>
+              </div>
+              <p class="text-caption text-muted">Flags can be resolved from the Overview tab. Resolving a flag records an audit log entry with the admin's ID.</p>
+            </div>
+
+            <!-- Suspend user -->
+            <div class="admin-learn-card">
+              <div class="admin-learn-card__header">
+                <div class="admin-learn-card__icon admin-learn-card__icon--danger"><i class="bi bi-slash-circle"></i></div>
+                <h3>Suspend user</h3>
+              </div>
+              <p>Suspending a user <strong>blocks all data creation, modification, and deletion</strong> for that account. The user can still:</p>
+              <ul class="admin-learn-card__list">
+                <li><i class="bi bi-check-lg"></i> Sign in and view their dashboard</li>
+                <li><i class="bi bi-check-lg"></i> Download existing files</li>
+                <li><i class="bi bi-check-lg"></i> Search and browse their work</li>
+                <li><i class="bi bi-x-lg text-danger"></i> Create files, works, subjects, sessions <span class="text-muted">(blocked)</span></li>
+                <li><i class="bi bi-x-lg text-danger"></i> Delete any existing data <span class="text-muted">(blocked)</span></li>
+              </ul>
+              <p class="text-caption text-muted mt-2">The user will see a clear error message explaining their account has been suspended. <strong>Hard Delete</strong> becomes available for suspended users, allowing you to irrevocably wipe their entire data footprint from the database and storage.</p>
+            </div>
+
+            <!-- Restore account -->
+            <div class="admin-learn-card">
+              <div class="admin-learn-card__header">
+                <div class="admin-learn-card__icon admin-learn-card__icon--success"><i class="bi bi-arrow-counterclockwise"></i></div>
+                <h3>Restore account</h3>
+              </div>
+              <p>Restoring a user <strong>re-enables file uploads</strong> for that account. Use this after reviewing the abuse flags and confirming the user's behavior is acceptable.</p>
+              <p>Restoration is immediate — the user can upload files again on their next attempt.</p>
+              <p class="text-caption text-muted">Every restore action is recorded in the audit log with the admin's user ID and timestamp.</p>
+            </div>
+
+            <!-- Audit logs -->
+            <div class="admin-learn-card">
+              <div class="admin-learn-card__header">
+                <div class="admin-learn-card__icon admin-learn-card__icon--info"><i class="bi bi-journal-text"></i></div>
+                <h3>Audit logs</h3>
+              </div>
+              <p>The audit log records <strong>every significant action</strong> taken in the system. Events tracked include:</p>
+              <ul class="admin-learn-card__list">
+                <li><i class="bi bi-cloud-upload"></i> File uploads and downloads</li>
+                <li><i class="bi bi-trash3"></i> File, work, subject, and session deletions</li>
+                <li><i class="bi bi-box-arrow-in-right"></i> User logins</li>
+                <li><i class="bi bi-calendar-plus"></i> Session and subject creation</li>
+                <li><i class="bi bi-shield-exclamation"></i> Admin actions (suspend, restore, resolve)</li>
+                <li><i class="bi bi-exclamation-triangle"></i> Abuse flag creation</li>
+              </ul>
+              <p class="text-caption text-muted">Each entry includes user ID, IP address, user agent, timestamp, and contextual metadata. The Overview tab shows the 50 most recent entries.</p>
+            </div>
+
+            <!-- File limits -->
+            <div class="admin-learn-card">
+              <div class="admin-learn-card__header">
+                <div class="admin-learn-card__icon"><i class="bi bi-file-earmark-check"></i></div>
+                <h3>File &amp; storage limits</h3>
+              </div>
+              <p>The following limits are enforced system-wide:</p>
+              <div class="admin-learn-card__table">
+                <div><span class="text-muted">Max upload size</span><strong>25 MB per file</strong></div>
+                <div><span class="text-muted">Max storage per user</span><strong>256 MB</strong></div>
+                <div><span class="text-muted">Max files per request</span><strong>20 files</strong></div>
+                <div><span class="text-muted">Upload rate limit</span><strong>35 per minute</strong></div>
+                <div><span class="text-muted">Login rate limit</span><strong>10 per minute</strong></div>
+                <div><span class="text-muted">Max repositories</span><strong>50 per user</strong></div>
+              </div>
+              <p class="text-caption text-muted mt-2">These can be overridden via environment variables: <code>MAX_UPLOAD_SIZE</code>, <code>MAX_STORAGE_PER_USER</code>, <code>UPLOADS_PER_MINUTE</code>, <code>LOGIN_RATE_LIMIT</code>, <code>MAX_REPOSITORIES</code>.</p>
+            </div>
+
+            <!-- Allowed file types -->
+            <div class="admin-learn-card">
+              <div class="admin-learn-card__header">
+                <div class="admin-learn-card__icon"><i class="bi bi-filetype-py"></i></div>
+                <h3>Allowed file types</h3>
+              </div>
+              <p>Only the following file extensions are allowed for upload:</p>
+              <div class="admin-learn-card__tags" id="allowed-ext-list">
+                <span class="admin-ext-tag">.py</span><span class="admin-ext-tag">.ipynb</span><span class="admin-ext-tag">.js</span><span class="admin-ext-tag">.ts</span><span class="admin-ext-tag">.java</span><span class="admin-ext-tag">.c</span><span class="admin-ext-tag">.cpp</span><span class="admin-ext-tag">.go</span><span class="admin-ext-tag">.rs</span><span class="admin-ext-tag">.html</span><span class="admin-ext-tag">.css</span><span class="admin-ext-tag">.json</span><span class="admin-ext-tag">.md</span><span class="admin-ext-tag">.txt</span><span class="admin-ext-tag">.pdf</span><span class="admin-ext-tag">.docx</span><span class="admin-ext-tag">.xlsx</span><span class="admin-ext-tag">.pptx</span><span class="admin-ext-tag">.sql</span><span class="admin-ext-tag">.csv</span><span class="admin-ext-tag">.yaml</span><span class="admin-ext-tag">.xml</span><span class="admin-ext-tag">.sh</span><span class="admin-ext-tag">.tex</span>
+                <span class="admin-ext-tag admin-ext-tag--more">+more</span>
+              </div>
+              <p class="text-caption text-muted mt-2">Override with the <code>ALLOWED_FILE_TYPES</code> environment variable (comma-separated).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", async () => {
+        const api = (window as any).__labrepo_api;
+        const showToast = (window as any).__labrepo_showToast;
+        const formatSize = (window as any).__labrepo_formatSize;
+        const formatRelativeTime = (window as any).__labrepo_formatRelativeTime;
+
+        // SEO defaults (duplicated from utils/seo.ts for client-side use)
+        const defaultSEO = {
+          title: 'LabRepo — Student Workspace',
+          description: 'Safely organize and retrieve your college lab work. Never lose a file again.',
+          image: '/images/3d_folder.png',
+        };
+
+        // Wait for Clerk to be ready
+        await new Promise<void>((resolve) => {
+          const check = () => {
+            const c = (window as any).Clerk;
+            if (c && (typeof c.isReady === 'function' ? c.isReady() : c.loaded)) resolve();
+            else setTimeout(check, 100);
+          };
+          check();
+        });
+
+        const loadingEl = document.getElementById("admin-loading")!;
+        const deniedEl = document.getElementById("admin-denied")!;
+        const contentEl = document.getElementById("admin-content")!;
+
+        // ===== Tab switching =====
+        document.querySelectorAll(".admin-tab").forEach((tab: any) => {
+          tab.addEventListener("click", () => {
+            document.querySelectorAll(".admin-tab").forEach((t: any) => t.classList.remove("active"));
+            document.querySelectorAll(".admin-tab-content").forEach((c: any) => c.style.display = "none");
+            tab.classList.add("active");
+            document.getElementById(`tab-${tab.dataset.tab}`)!.style.display = "block";
+
+            // Lazy-load users tab
+            if (tab.dataset.tab === "users" && !usersLoaded) {
+              loadUsers();
+            }
+          });
+        });
+
+        let usersLoaded = false;
+        
+        let allAuditLogs: any[] = [];
+        let currentAuditPage = 1;
+        const auditItemsPerPage = 10;
+        
+        let allAbuseFlags: any[] = [];
+        let currentFlagPage = 1;
+        const flagItemsPerPage = 10;
+
+        function renderAuditLogs() {
+          const auditList = document.getElementById("audit-list")!;
+          auditList.innerHTML = "";
+          if (!allAuditLogs.length) {
+            auditList.innerHTML = '<li class="admin-list__placeholder text-muted text-caption">No audit events yet.</li>';
+            document.getElementById("audit-prev")!.setAttribute("disabled", "true");
+            document.getElementById("audit-next")!.setAttribute("disabled", "true");
+            return;
+          }
+          const totalPages = Math.ceil(allAuditLogs.length / auditItemsPerPage);
+          document.getElementById("audit-showing")!.textContent = `Page ${currentAuditPage} of ${totalPages} (${allAuditLogs.length} total)`;
+          
+          const start = (currentAuditPage - 1) * auditItemsPerPage;
+          const end = start + auditItemsPerPage;
+          
+          allAuditLogs.slice(start, end).forEach((entry: any) => {
+            const li = document.createElement("li");
+            li.className = "admin-list__item animate-fade-in";
+            const actionLabel = (entry.action || "unknown").replace(/_/g, " ");
+            const timeAgo = entry.createdAt ? formatRelativeTime(entry.createdAt) : "unknown";
+            const icon = getActionIcon(entry.action);
+            li.innerHTML = `
+              <span class="admin-list__item-icon">${icon}</span>
+              <div class="admin-list__item-body">
+                <span class="text-caption">${actionLabel}</span>
+                <span class="text-caption text-muted">${timeAgo}${entry.userId ? ` · ${entry.userId.slice(0, 16)}…` : ""}</span>
+              </div>
+            `;
+            auditList.appendChild(li);
+          });
+          
+          const prevBtn = document.getElementById("audit-prev") as HTMLButtonElement;
+          const nextBtn = document.getElementById("audit-next") as HTMLButtonElement;
+          prevBtn.disabled = currentAuditPage === 1;
+          nextBtn.disabled = currentAuditPage === totalPages;
+        }
+
+        function renderAbuseFlags() {
+          const flagList = document.getElementById("flag-list")!;
+          flagList.innerHTML = "";
+          if (!allAbuseFlags.length) {
+            flagList.innerHTML = '<li class="admin-list__placeholder text-muted text-caption"><i class="bi bi-check-circle"></i> No active abuse flags</li>';
+            document.getElementById("flag-prev")!.setAttribute("disabled", "true");
+            document.getElementById("flag-next")!.setAttribute("disabled", "true");
+            return;
+          }
+          
+          const totalPages = Math.ceil(allAbuseFlags.length / flagItemsPerPage);
+          document.getElementById("flag-showing")!.textContent = `Page ${currentFlagPage} of ${totalPages} (${allAbuseFlags.length} total)`;
+          
+          const start = (currentFlagPage - 1) * flagItemsPerPage;
+          const end = start + flagItemsPerPage;
+          
+          allAbuseFlags.slice(start, end).forEach((flag: any) => {
+            const li = document.createElement("li");
+            li.className = "admin-list__item admin-list__item--flag animate-fade-in";
+            const severityClass = flag.severity === "high" ? "admin-badge--danger" : flag.severity === "medium" ? "admin-badge--warning" : "admin-badge--info";
+            const timeAgo = flag.createdAt ? formatRelativeTime(flag.createdAt) : "unknown";
+            li.innerHTML = `
+              <div class="admin-list__item-body" style="flex: 1; min-width: 0;">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-caption font-semibold">${(flag.type || "unknown").replace(/_/g, " ")}</span>
+                  <span class="admin-badge ${severityClass}">${flag.severity || "—"}</span>
+                  ${flag.resolved ? '<span class="admin-badge admin-badge--success">resolved</span>' : ""}
+                </div>
+                <span class="text-caption text-muted">${flag.reason || "No reason"} · ${timeAgo}</span>
+              </div>
+              ${!flag.resolved ? `<button class="btn btn--ghost btn--sm btn-resolve-flag" data-id="${flag.id}" title="Resolve flag"><i class="bi bi-check-lg"></i></button>` : ""}
+            `;
+            flagList.appendChild(li);
+          });
+          
+          flagList.querySelectorAll(".btn-resolve-flag").forEach((btn: any) => {
+            btn.addEventListener("click", async () => {
+              try {
+                await api.resolveFlag(parseInt(btn.dataset.id), "Resolved from admin panel");
+                showToast("Flag resolved", "success");
+                await loadOverview();
+        await loadAnnouncements();
+              } catch (err: any) {
+                showToast(err.message || "Failed to resolve flag", "error");
+              }
+            });
+          });
+          
+          const prevBtn = document.getElementById("flag-prev") as HTMLButtonElement;
+          const nextBtn = document.getElementById("flag-next") as HTMLButtonElement;
+          prevBtn.disabled = currentFlagPage === 1;
+          nextBtn.disabled = currentFlagPage === totalPages;
+        }
+
+        document.getElementById("audit-prev")!.addEventListener("click", () => {
+          if (currentAuditPage > 1) {
+            currentAuditPage--;
+            renderAuditLogs();
+          }
+        });
+        document.getElementById("audit-next")!.addEventListener("click", () => {
+          if (currentAuditPage < Math.ceil(allAuditLogs.length / auditItemsPerPage)) {
+            currentAuditPage++;
+            renderAuditLogs();
+          }
+        });
+        
+        document.getElementById("flag-prev")!.addEventListener("click", () => {
+          if (currentFlagPage > 1) {
+            currentFlagPage--;
+            renderAbuseFlags();
+          }
+        });
+        document.getElementById("flag-next")!.addEventListener("click", () => {
+          if (currentFlagPage < Math.ceil(allAbuseFlags.length / flagItemsPerPage)) {
+            currentFlagPage++;
+            renderAbuseFlags();
+          }
+        });
+
+        // ===== Overview data =====
+        async function loadOverview() {
+          try {
+            const summary = await api.getAdminSummary();
+            loadingEl.style.display = "none";
+            contentEl.style.display = "block";
+
+            document.getElementById("user-count")!.textContent = String(summary.users);
+            document.getElementById("flag-count")!.textContent = String(summary.openFlags);
+            document.getElementById("audit-count")!.textContent = String(summary.auditLogCount);
+            document.getElementById("storage-used")!.textContent = formatSize(summary.storageUsed || 0);
+            document.getElementById("total-uploads")!.textContent = String(summary.totalUploads || 0);
+            document.getElementById("total-downloads")!.textContent = String(summary.totalDownloads || 0);
+            
+            document.getElementById("lifetime-users")!.textContent = String(summary.lifetimeUsers || 0);
+            document.getElementById("lifetime-uploads")!.textContent = String(summary.lifetimeUploads || 0);
+            document.getElementById("lifetime-downloads")!.textContent = String(summary.lifetimeDownloads || 0);
+
+            // Load audit logs
+            const logsRes = await api.getAuditLogs();
+            allAuditLogs = logsRes.logs || [];
+            currentAuditPage = 1;
+            renderAuditLogs();
+
+            // Load abuse flags
+            const flagsRes = await api.getAbuseFlags();
+            allAbuseFlags = flagsRes.flags || [];
+            currentFlagPage = 1;
+            renderAbuseFlags();
+            
+            // Load announcements
+            await loadAnnouncements();
+            
+          } catch (error: any) {
+            console.error("Admin load error:", error);
+            if (error?.status === 403) {
+              loadingEl.style.display = "none";
+              deniedEl.style.display = "flex";
+            } else {
+              loadingEl.style.display = "none";
+              contentEl.style.display = "block";
+              document.getElementById("audit-list")!.innerHTML = '<li class="admin-list__placeholder text-muted text-caption">Unable to load admin data.</li>';
+              document.getElementById("flag-list")!.innerHTML = '<li class="admin-list__placeholder text-muted text-caption">Unable to load admin data.</li>';
+              showToast("Failed to load admin data", "error");
+            }
+          }
+        }
+
+        
+        // ===== Announcements =====
+        async function loadAnnouncements() {
+          const list = document.getElementById('announcements-list');
+          if (!list) return;
+          list.innerHTML = '<div class="admin-list__placeholder text-muted text-caption">Loading...</div>';
+          try {
+            const res = await api.getAdminAnnouncements();
+            if (!res.announcements || res.announcements.length === 0) {
+              list.innerHTML = '<div class="admin-list__placeholder text-muted text-caption">No announcements found.</div>';
+              return;
+            }
+            list.innerHTML = res.announcements.map((a) => `
+              <div class="border-b border-white/10 p-4 flex items-center justify-between gap-4">
+                <div>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="hawkins-badge" style="background: var(--color-surface-hover); color: var(--color-ink-muted); font-size: 0.6rem; padding: 2px 8px;">${a.type.toUpperCase()}</span>
+                    <strong class="text-body-strong">${a.title}</strong>
+                    ${a.isActive ? '<span style="color: #49b87a; font-size: 0.8rem;"><i class="bi bi-check-circle-fill"></i> Active</span>' : '<span class="text-muted" style="font-size: 0.8rem;">Inactive</span>'}
+                  </div>
+                  <p class="text-caption text-muted">${a.message}</p>
+                </div>
+                <div class="flex gap-2 shrink-0">
+                  <button class="btn btn--secondary-pill btn--sm btn-edit-ann" data-id="${a.id}" data-json='${JSON.stringify(a).replace(/'/g, "&#39;")}'>Edit</button>
+                  <button class="btn btn--ghost btn--sm btn-delete-ann" data-id="${a.id}" style="color: #ff6666;"><i class="bi bi-trash3"></i></button>
+                </div>
+              </div>
+            `).join('');
+
+            list.querySelectorAll('.btn-edit-ann').forEach((btn) => {
+              btn.addEventListener('click', () => {
+                const data = JSON.parse(btn.getAttribute('data-json'));
+                document.getElementById('announcement-id').value = data.id;
+                document.getElementById('announcement-title').value = data.title;
+                document.getElementById('announcement-message').value = data.message;
+                document.getElementById('announcement-type').value = data.type;
+                document.getElementById('announcement-status').value = data.isActive ? '1' : '0';
+                document.getElementById('announcement-url').value = data.url || '';
+                document.getElementById('announcement-url-label').value = data.urlLabel || '';
+                document.getElementById('announcement-form-title').textContent = 'Edit Announcement';
+                document.getElementById('announcement-form-container').style.display = 'block';
+              });
+            });
+
+            list.querySelectorAll('.btn-delete-ann').forEach((btn) => {
+              btn.addEventListener('click', async () => {
+                if (confirm('Delete this announcement?')) {
+                  const id = btn.getAttribute('data-id');
+                  await api.deleteAdminAnnouncement(id);
+                  showToast('Announcement deleted', 'success');
+                  loadAnnouncements();
+                }
+              });
+            });
+          } catch (e) {
+            list.innerHTML = '<div class="admin-list__placeholder text-danger text-caption">Failed to load announcements.</div>';
+          }
+        }
+
+        document.getElementById('btn-create-announcement')?.addEventListener('click', () => {
+          document.getElementById('announcement-form').reset();
+          document.getElementById('announcement-id').value = '';
+          document.getElementById('announcement-form-title').textContent = 'Create Announcement';
+          document.getElementById('announcement-form-container').style.display = 'block';
+        });
+
+        document.getElementById('btn-cancel-announcement')?.addEventListener('click', () => {
+          document.getElementById('announcement-form-container').style.display = 'none';
+        });
+
+        document.getElementById('announcement-form')?.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const id = document.getElementById('announcement-id').value;
+          const data = {
+            title: document.getElementById('announcement-title').value,
+            message: document.getElementById('announcement-message').value,
+            type: document.getElementById('announcement-type').value,
+            isActive: parseInt(document.getElementById('announcement-status').value),
+            url: document.getElementById('announcement-url').value || null,
+            urlLabel: document.getElementById('announcement-url-label').value || null,
+          };
+          try {
+            if (id) {
+              await api.updateAdminAnnouncement(id, data);
+              showToast('Announcement updated', 'success');
+            } else {
+              await api.createAdminAnnouncement(data);
+              showToast('Announcement created', 'success');
+            }
+            document.getElementById('announcement-form-container').style.display = 'none';
+            loadAnnouncements();
+          } catch (err: any) {
+            showToast(err.message || 'Failed to save announcement', 'error');
+          }
+        });
+
+
+        // ===== Users list =====
+        async function loadUsers() {
+          const container = document.getElementById("user-list-container")!;
+          const loadingDiv = document.getElementById("user-list-loading")!;
+          loadingDiv.style.display = "block";
+          container.innerHTML = "";
+
+          try {
+            const { users } = await api.getAdminUsers();
+            usersLoaded = true;
+            loadingDiv.style.display = "none";
+            document.getElementById("user-list-count")!.textContent = `${users.length} user${users.length !== 1 ? "s" : ""}`;
+
+            if (!users.length) {
+              container.innerHTML = '<div class="admin-list__placeholder text-muted text-caption">No registered users.</div>';
+              return;
+            }
+
+            container.innerHTML = users.map((user: any) => {
+              const isSuspended = Boolean(user.uploads_suspended);
+              const hasFlags = (user.open_flags || 0) > 0;
+              const timeAgo = user.created_at ? formatRelativeTime(user.created_at) : "—";
+              const lastLogin = user.last_login_at ? formatRelativeTime(user.last_login_at) : "never";
+
+              return `
+                <div class="admin-user-row animate-fade-in ${isSuspended ? 'admin-user-row--suspended' : ''}">
+                  <div class="admin-user-row__main">
+                    <div class="admin-user-row__identity">
+                      <div class="admin-user-row__avatar ${isSuspended ? 'admin-user-row__avatar--suspended' : ''}">
+                        <i class="bi bi-person"></i>
+                      </div>
+                      <div class="admin-user-row__info">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="text-caption font-semibold admin-user-row__id">${user.clerk_id}</span>
+                          ${isSuspended ? '<span class="admin-badge admin-badge--danger">suspended</span>' : ''}
+                          ${hasFlags ? `<span class="admin-badge admin-badge--warning">${user.open_flags} flag${user.open_flags > 1 ? 's' : ''}</span>` : ''}
+                          ${!user.onboarding_completed ? '<span class="admin-badge admin-badge--info">new</span>' : ''}
+                        </div>
+                        <div class="text-caption text-muted">
+                          Joined ${timeAgo} · Last login ${lastLogin}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="admin-user-row__stats hide-mobile">
+                      <div class="admin-user-row__stat">
+                        <span class="text-caption text-muted">Storage</span>
+                        <span class="text-caption font-semibold">${formatSize(user.storage_used || 0)}</span>
+                      </div>
+                      <div class="admin-user-row__stat">
+                        <span class="text-caption text-muted">Files</span>
+                        <span class="text-caption font-semibold">${user.file_count || 0}</span>
+                      </div>
+                      <div class="admin-user-row__stat">
+                        <span class="text-caption text-muted">Uploads</span>
+                        <span class="text-caption font-semibold">${user.total_uploads || 0}</span>
+                      </div>
+                      <div class="admin-user-row__stat">
+                        <span class="text-caption text-muted">Sessions</span>
+                        <span class="text-caption font-semibold">${user.session_count || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="admin-user-row__actions">
+                    ${isSuspended
+                      ? `<button class="btn btn--dark-utility btn--sm btn-user-restore" data-uid="${user.clerk_id}"><i class="bi bi-arrow-counterclockwise"></i> Restore</button>
+                         <button class="btn btn--danger btn--sm btn-user-harddelete" data-uid="${user.clerk_id}"><i class="bi bi-trash"></i> Hard Delete</button>`
+                      : `<button class="btn btn--dark-utility btn--sm btn-user-extensions" data-uid="${user.clerk_id}" data-exts="${user.allowed_extensions || ''}"><i class="bi bi-file-earmark-plus"></i> Extensions</button>
+                         <button class="btn btn--danger btn--sm btn-user-suspend" data-uid="${user.clerk_id}"><i class="bi bi-slash-circle"></i> Suspend</button>`
+                    }
+                  </div>
+                </div>
+              `;
+            }).join("");
+
+            // Wire up suspend buttons
+            container.querySelectorAll(".btn-user-suspend").forEach((btn: any) => {
+              btn.addEventListener("click", async () => {
+                const uid = btn.dataset.uid;
+                const reason = prompt(`Suspend uploads for user ${uid.slice(0, 16)}…?\n\nPlease enter a reason (this will be shown to the user):`);
+                if (reason === null) return; // User cancelled
+                
+                try {
+                  await api.suspendUserUploads(uid, reason || "Violation of terms of service.");
+                  showToast("User uploads suspended", "warning");
+                  await loadUsers();
+                  await loadOverview();
+                } catch (err: any) {
+                  showToast(err.message || "Action failed", "error");
+                }
+              });
+            });
+
+            // Wire up restore buttons
+            container.querySelectorAll(".btn-user-restore").forEach((btn: any) => {
+              btn.addEventListener("click", async () => {
+                const uid = btn.dataset.uid;
+                try {
+                  await api.restoreUserAccount(uid, "Restored from admin panel");
+                  showToast("User access restored", "success");
+                  await loadUsers();
+                  await loadOverview();
+                } catch (err: any) {
+                  showToast(err.message || "Action failed", "error");
+                }
+              });
+            });
+
+            // Wire up user extensions buttons
+            container.querySelectorAll(".btn-user-extensions").forEach((btn: any) => {
+              btn.addEventListener("click", async () => {
+                const uid = btn.dataset.uid;
+                const currentExts = btn.dataset.exts || "";
+                const newExts = prompt(`Enter allowed file extensions for user ${uid.slice(0, 16)}… (comma separated):\nLeave blank to remove overrides.`, currentExts);
+                if (newExts === null) return;
+                
+                try {
+                  await api.updateUserExtensions(uid, newExts);
+                  showToast("User extensions updated", "success");
+                  await loadUsers();
+                } catch (err: any) {
+                  showToast(err.message || "Action failed", "error");
+                }
+              });
+            });
+
+            // Wire up hard delete buttons
+            container.querySelectorAll(".btn-user-harddelete").forEach((btn: any) => {
+              btn.addEventListener("click", async () => {
+                const uid = btn.dataset.uid;
+                const confirmation = prompt(`WARNING: This will permanently delete ALL data for user ${uid.slice(0, 16)}… including files, sessions, and logs.\n\nType "DELETE" to confirm:`);
+                if (confirmation !== "DELETE") {
+                  if (confirmation !== null) showToast("Deletion cancelled.", "info");
+                  return;
+                }
+                
+                try {
+                  await api.hardDeleteUser(uid);
+                  showToast("User and all data permanently deleted", "success");
+                  await loadUsers();
+                  await loadOverview();
+                } catch (err: any) {
+                  showToast(err.message || "Hard delete failed", "error");
+                }
+              });
+            });
+          } catch (err: any) {
+            loadingDiv.style.display = "none";
+            container.innerHTML = '<div class="admin-list__placeholder text-muted text-caption">Failed to load users.</div>';
+            showToast("Failed to load users", "error");
+          }
+        }
+
+        function getActionIcon(action: string): string {
+          const icons: Record<string, string> = {
+            file_uploaded: '<i class="bi bi-cloud-upload"></i>',
+            file_downloaded: '<i class="bi bi-cloud-download"></i>',
+            file_deleted: '<i class="bi bi-trash3"></i>',
+            session_created: '<i class="bi bi-calendar-plus"></i>',
+            session_deleted: '<i class="bi bi-calendar-x"></i>',
+            subject_created: '<i class="bi bi-book"></i>',
+            work_created: '<i class="bi bi-flask"></i>',
+            login: '<i class="bi bi-box-arrow-in-right"></i>',
+            admin_resolved_flag: '<i class="bi bi-check-circle"></i>',
+            admin_suspended_uploads: '<i class="bi bi-slash-circle"></i>',
+            admin_restored_user: '<i class="bi bi-arrow-counterclockwise"></i>',
+            abuse_flag_created: '<i class="bi bi-exclamation-triangle"></i>',
+            item_restored: '<i class="bi bi-arrow-repeat"></i>',
+          };
+          return icons[action] || '<i class="bi bi-dot"></i>';
+        }
+
+        // Load SEO data
+        async function loadSEOData() {
+          try {
+            const res = await api.getAdminSEO();
+            const titleInput = document.getElementById('seo-title') as HTMLInputElement;
+            const descInput = document.getElementById('seo-description') as HTMLTextAreaElement;
+            const twitterInput = document.getElementById('seo-twitter') as HTMLInputElement;
+            const ogPreviewTitle = document.getElementById('og-preview-title');
+            const ogPreviewDesc = document.getElementById('og-preview-desc');
+            const ogPreview = document.getElementById('og-image-preview');
+
+            let finalImage = defaultSEO.image;
+            if (res.seo) {
+              if (res.seo.title && titleInput) titleInput.value = res.seo.title;
+              if (res.seo.description && descInput) descInput.value = res.seo.description;
+              if (res.seo.twitterHandle && twitterInput) twitterInput.value = res.seo.twitterHandle;
+              
+              if (ogPreviewTitle) ogPreviewTitle.textContent = res.seo.title || defaultSEO.title;
+              if (ogPreviewDesc) ogPreviewDesc.textContent = res.seo.description || defaultSEO.description;
+              
+              if (res.seo.image) finalImage = res.seo.image;
+            } else {
+              if (ogPreviewTitle) ogPreviewTitle.textContent = defaultSEO.title;
+              if (ogPreviewDesc) ogPreviewDesc.textContent = defaultSEO.description;
+            }
+            
+            if (ogPreview) {
+              ogPreview.innerHTML = `<img src="${finalImage}" alt="OG Preview" class="w-full h-full object-cover" />`;
+            }
+          } catch (err) {
+            console.error('Failed to load SEO data', err);
+          }
+        }
+
+        async function loadConfigData() {
+          try {
+            const res = await api.getAdminConfig();
+            if (res.config) {
+              const appendFilesInput = document.getElementById('config-append-files') as HTMLInputElement;
+              if (appendFilesInput && res.config.append_file_types) {
+                appendFilesInput.value = res.config.append_file_types;
+              }
+            }
+          } catch (err) {
+            console.error('Failed to load Config data', err);
+          }
+        }
+
+        // Handle SEO form submit
+        const seoForm = document.getElementById('seo-form');
+        if (seoForm) {
+          seoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target as HTMLFormElement);
+            const data = Object.fromEntries(formData.entries());
+            
+            try {
+              const btn = (e.target as HTMLElement).querySelector('button');
+              if (btn) btn.disabled = true;
+              await api.updateAdminSEO(data);
+              showToast('SEO settings saved successfully', 'success');
+              loadSEOData();
+            } catch (err) {
+              showToast('Failed to save SEO settings', 'error');
+            } finally {
+              const btn = (e.target as HTMLElement).querySelector('button');
+              if (btn) btn.disabled = false;
+            }
+          });
+        }
+
+        // Handle Config form submit
+        const configForm = document.getElementById('config-form');
+        if (configForm) {
+          configForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target as HTMLFormElement);
+            const data = Object.fromEntries(formData.entries());
+            
+            try {
+              const btn = (e.target as HTMLElement).querySelector('button');
+              if (btn) btn.disabled = true;
+              await api.updateAdminConfig(data);
+              showToast('Config saved successfully', 'success');
+              loadConfigData();
+            } catch (err) {
+              showToast('Failed to save config', 'error');
+            } finally {
+              const btn = (e.target as HTMLElement).querySelector('button');
+              if (btn) btn.disabled = false;
+            }
+          });
+        }
+
+        // Handle OG image upload
+        const seoImageForm = document.getElementById('seo-image-form');
+        if (seoImageForm) {
+          seoImageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('seo-image') as HTMLInputElement;
+            const file = fileInput.files?.[0];
+            if (!file) return showToast('Please select an image first', 'error');
+            
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            try {
+              const btn = (e.target as HTMLElement).querySelector('button');
+              if (btn) btn.disabled = true;
+              
+              const token = await window.Clerk.session?.getToken();
+              if (!token) throw new Error("No session token");
+              const res = await fetch(`/api/admin/seo/og-image`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData,
+              });
+              
+              if (res.ok) {
+                showToast('Image uploaded successfully', 'success');
+                // The image preview is already updated locally via the change listener,
+                // but loadSEOData ensures the saved image is fetched properly as the new fallback source of truth.
+                loadSEOData();
+              } else {
+                let errorMsg = 'Upload failed';
+                try {
+                  const errorData = await res.json();
+                  if (errorData.error) errorMsg = errorData.error;
+                } catch (e) {}
+                throw new Error(errorMsg);
+              }
+            } catch (err: any) {
+              showToast(err.message || 'Failed to upload image', 'error');
+            } finally {
+              const btn = (e.target as HTMLElement).querySelector('button');
+              if (btn) btn.disabled = false;
+            }
+          });
+        }
+
+        // Real-time SEO input sync
+        const titleInput = document.getElementById('seo-title') as HTMLInputElement;
+        const descInput = document.getElementById('seo-description') as HTMLTextAreaElement;
+        
+        if (titleInput) {
+          titleInput.addEventListener('input', (e) => {
+            const val = (e.target as HTMLInputElement).value;
+            const ogPreviewTitle = document.getElementById('og-preview-title');
+            if (ogPreviewTitle) ogPreviewTitle.textContent = val || defaultSEO.title;
+          });
+        }
+        
+        if (descInput) {
+          descInput.addEventListener('input', (e) => {
+            const val = (e.target as HTMLTextAreaElement).value;
+            const ogPreviewDesc = document.getElementById('og-preview-desc');
+            if (ogPreviewDesc) ogPreviewDesc.textContent = val || defaultSEO.description;
+          });
+        }
+        
+        const fileInput = document.getElementById('seo-image') as HTMLInputElement;
+        if (fileInput) {
+          fileInput.addEventListener('change', (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            const fileNameSpan = document.getElementById('seo-image-filename');
+            const ogPreview = document.getElementById('og-image-preview');
+            
+            if (file) {
+              if (fileNameSpan) fileNameSpan.textContent = file.name;
+              if (ogPreview) {
+                const objectUrl = URL.createObjectURL(file);
+                ogPreview.innerHTML = `<img src="${objectUrl}" alt="OG Preview" class="w-full h-full object-cover" />`;
+              }
+            } else {
+              if (fileNameSpan) fileNameSpan.textContent = 'No file chosen';
+            }
+          });
+        }
+
+        // Initial load
+        await loadOverview();
+        await loadSEOData();
+        await loadConfigData();
+      });
+    </script>
+
+    <style is:global>
+      /* Admin kicker */
+      .admin-kicker {
+        margin-bottom: 6px;
+        color: #b37a7a;
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+
+      /* Signed-out hero card */
+      .admin-card {
+        padding: var(--space-8);
+        text-align: center;
+        border: 1px solid var(--color-divider);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(145deg, rgba(255,255,255,.065), rgba(255,255,255,.02));
+        box-shadow: var(--shadow-product);
+      }
+      .admin-card--hero { padding: var(--space-12) var(--space-8); }
+      .admin-card__icon-badge {
+        display: inline-grid; place-items: center;
+        width: 56px; height: 56px; margin-bottom: var(--space-6);
+        color: var(--color-primary-on-dark); background: var(--color-primary-soft);
+        border-radius: 18px; font-size: 1.5rem;
+      }
+
+      /* Tabs */
+      .admin-tabs {
+        display: flex; gap: 4px; padding: 4px;
+        background: rgba(255,255,255,.04);
+        border: 1px solid var(--color-divider);
+        border-radius: var(--radius-sm);
+        overflow-x: auto;
+      }
+      .admin-tab {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 9px 16px; border: none; border-radius: 8px;
+        background: transparent; color: var(--color-ink-muted);
+        font-size: .85rem; font-weight: 600; cursor: pointer;
+        transition: all var(--transition-fast); white-space: nowrap;
+      }
+      .admin-tab:hover { color: var(--color-ink); background: rgba(255,255,255,.06); }
+      .admin-tab.active { color: #fff; background: var(--color-primary-soft); }
+      .admin-tab i { font-size: .9em; }
+
+      /* Stat cards */
+      .admin-stat-card {
+        display: flex; align-items: center; gap: 14px; padding: 20px;
+        border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+        background: linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.018));
+        transition: transform var(--transition-fast), border-color var(--transition-fast);
+      }
+      .admin-stat-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.22); }
+      .admin-stat-card--compact { padding: 14px 18px; gap: 12px; }
+      .admin-stat-card__icon {
+        display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px;
+        border-radius: 12px; font-size: 1.1rem;
+        color: var(--color-primary-on-dark); background: var(--color-primary-soft);
+      }
+      .admin-stat-card__icon--warning { color: var(--color-warning); background: rgba(246, 182, 83, .14); }
+      .admin-stat-card__icon--info { color: #7dabf8; background: rgba(125, 171, 248, .12); }
+      .admin-stat-card__value {
+        font-family: var(--font-display); font-size: 1.55rem; font-weight: 700;
+        letter-spacing: -.04em; line-height: 1.15; color: var(--color-ink);
+      }
+      .admin-stat-card__value--sm { font-size: 1.1rem; }
+
+      /* Panel sections */
+      .admin-panel-section {
+        border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+        background: rgba(255,255,255,.025); overflow: hidden;
+      }
+      .admin-panel-section__header {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 16px 20px;
+        border-bottom: 1px solid var(--color-divider); background: rgba(255,255,255,.03);
+      }
+      .admin-panel-section__header h2 { font-size: .92rem; }
+      .admin-panel-section__header h2 i { margin-right: 6px; color: var(--color-ink-muted); font-size: .85em; }
+
+      /* Admin list */
+      .admin-list { list-style: none; margin: 0; padding: 0; }
+      .admin-list__item {
+        display: flex; align-items: flex-start; gap: 12px;
+        padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,.05);
+        transition: background var(--transition-fast);
+      }
+      .admin-list__item:last-child { border-bottom: none; }
+      .admin-list__item:hover { background: rgba(255,255,255,.03); }
+      .admin-list__item--flag { align-items: center; }
+      .admin-list__item-icon {
+        display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px;
+        border-radius: 8px; font-size: .82rem;
+        color: var(--color-ink-muted); background: rgba(255,255,255,.05);
+      }
+      .admin-list__item-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+      .admin-list__placeholder { padding: 28px 20px; text-align: center; }
+
+      /* Badges */
+      .admin-badge {
+        display: inline-flex; align-items: center; padding: 2px 8px;
+        border-radius: var(--radius-pill); font-size: .7rem; font-weight: 700;
+        letter-spacing: .03em; text-transform: uppercase;
+      }
+      .admin-badge--danger { color: var(--color-danger); background: rgba(255, 102, 102, .14); }
+      .admin-badge--warning { color: var(--color-warning); background: rgba(246, 182, 83, .14); }
+      .admin-badge--info { color: #7dabf8; background: rgba(125, 171, 248, .12); }
+      .admin-badge--success { color: var(--color-success); background: rgba(73, 184, 122, .14); }
+
+      /* Danger button */
+      .btn--danger {
+        color: #fff; background: rgba(255, 102, 102, .18); border-color: rgba(255, 102, 102, .38);
+      }
+      .btn--danger:hover {
+        background: rgba(255, 70, 70, .3); border-color: rgba(255, 102, 102, .55);
+        box-shadow: 0 8px 22px rgba(255, 70, 70, .15);
+      }
+
+      /* ===== USER LIST ===== */
+      .admin-user-row {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 16px; padding: 16px 20px;
+        border-bottom: 1px solid rgba(255,255,255,.05);
+        transition: background var(--transition-fast);
+      }
+      .admin-user-row:last-child { border-bottom: none; }
+      .admin-user-row:hover { background: rgba(255,255,255,.03); }
+      .admin-user-row--suspended { background: rgba(255, 102, 102, .04); }
+      .admin-user-row--suspended:hover { background: rgba(255, 102, 102, .07); }
+
+      .admin-user-row__main {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 20px; flex: 1; min-width: 0;
+      }
+      .admin-user-row__identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+      .admin-user-row__avatar {
+        display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px;
+        border-radius: 10px; font-size: 1rem;
+        color: var(--color-ink-muted); background: rgba(255,255,255,.06);
+      }
+      .admin-user-row__avatar--suspended {
+        color: var(--color-danger); background: rgba(255, 102, 102, .12);
+      }
+      .admin-user-row__info { min-width: 0; }
+      .admin-user-row__id {
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+        font-size: .78rem; letter-spacing: -.01em;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        max-width: 220px; display: inline-block; vertical-align: middle;
+      }
+
+      .admin-user-row__stats { display: flex; gap: 20px; flex-shrink: 0; }
+      .admin-user-row__stat {
+        display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 52px;
+      }
+      .admin-user-row__actions { flex-shrink: 0; }
+
+      /* ===== LEARN SECTION ===== */
+      .admin-learn-grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+        gap: 16px;
+      }
+      .admin-learn-card {
+        padding: 24px; border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+        background: rgba(255,255,255,.025);
+        transition: border-color var(--transition-fast);
+      }
+      .admin-learn-card:hover { border-color: rgba(255,255,255,.16); }
+      .admin-learn-card__header {
+        display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+      }
+      .admin-learn-card__header h3 { font-size: 1rem; font-weight: 700; }
+      .admin-learn-card__icon {
+        display: grid; place-items: center; width: 36px; height: 36px;
+        border-radius: 10px; font-size: .95rem;
+        color: var(--color-primary-on-dark); background: var(--color-primary-soft);
+      }
+      .admin-learn-card__icon--danger { color: var(--color-danger); background: rgba(255, 102, 102, .14); }
+      .admin-learn-card__icon--success { color: var(--color-success); background: rgba(73, 184, 122, .14); }
+      .admin-learn-card__icon--info { color: #7dabf8; background: rgba(125, 171, 248, .12); }
+
+      .admin-learn-card p { font-size: .88rem; line-height: 1.6; color: var(--color-ink-muted); margin-top: 8px; }
+      .admin-learn-card p strong { color: var(--color-ink); }
+      .admin-learn-card code {
+        padding: 1px 6px; border-radius: 4px;
+        background: rgba(255,255,255,.08); font-size: .8em; font-family: 'SFMono-Regular', Consolas, monospace;
+      }
+
+      .admin-learn-card__rules { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+      .admin-learn-rule {
+        display: flex; align-items: flex-start; gap: 10px;
+        padding: 12px; border-radius: 10px; background: rgba(255,255,255,.03);
+        border: 1px solid rgba(255,255,255,.06);
+      }
+      .admin-learn-rule strong { color: var(--color-ink); font-size: .85rem; display: block; margin-bottom: 2px; }
+      .admin-learn-rule p { margin: 0; font-size: .8rem; line-height: 1.5; }
+
+      .admin-learn-card__list {
+        list-style: none; padding: 0; margin: 10px 0 0;
+        display: flex; flex-direction: column; gap: 6px;
+      }
+      .admin-learn-card__list li {
+        display: flex; align-items: center; gap: 8px;
+        font-size: .85rem; color: var(--color-ink-muted);
+      }
+      .admin-learn-card__list li i { font-size: .8rem; color: var(--color-success); }
+      .admin-learn-card__list li .text-danger { color: var(--color-danger) !important; }
+
+      .admin-learn-card__table {
+        display: flex; flex-direction: column; gap: 0; margin-top: 10px;
+        border: 1px solid rgba(255,255,255,.06); border-radius: 10px; overflow: hidden;
+      }
+      .admin-learn-card__table > div {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 8px 14px; font-size: .83rem;
+        border-bottom: 1px solid rgba(255,255,255,.05);
+      }
+      .admin-learn-card__table > div:last-child { border-bottom: none; }
+      .admin-learn-card__table > div:nth-child(odd) { background: rgba(255,255,255,.02); }
+
+      .admin-learn-card__tags {
+        display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+      }
+      .admin-ext-tag {
+        padding: 3px 8px; border-radius: 6px; font-size: .75rem; font-weight: 600;
+        font-family: 'SFMono-Regular', Consolas, monospace;
+        background: rgba(255,255,255,.06); color: var(--color-ink-muted);
+      }
+      .admin-ext-tag--more { color: var(--color-primary-on-dark); background: var(--color-primary-soft); }
+
+      /* Utility overrides */
+      .py-12 { padding-block: 48px; }
+      .max-w-xl { max-width: 560px; }
+      .mx-auto { margin-inline: auto; }
+      .mt-1 { margin-top: 4px; }
+
+      .text-danger { color: var(--color-danger); }
+
+      .spinner {
+        width: 32px; height: 32px;
+        border: 3px solid var(--color-divider); border-top-color: var(--color-primary);
+        border-radius: 50%; animation: admin-spin 0.6s linear infinite;
+        margin-bottom: var(--space-4);
+      }
+      @keyframes admin-spin { to { transform: rotate(360deg); } }
+
+      .empty-state {
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; text-align: center; padding: 80px 0;
+      }
+
+      /* Mobile */
+      @media (max-width: 768px) {
+        .page-header { flex-direction: column; align-items: flex-start !important; gap: var(--space-4); }
+        .page-header .btn { width: 100%; }
+        .admin-stat-card { padding: 16px; }
+        .admin-stat-card__value { font-size: 1.3rem; }
+        .admin-list__item { padding: 10px 14px; gap: 10px; }
+        .admin-panel-section__header { padding: 14px 14px; }
+        .admin-user-row { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px; }
+        .admin-user-row__main { flex-direction: column; align-items: flex-start; gap: 10px; }
+        .admin-user-row__actions { width: 100%; }
+        .admin-user-row__actions .btn { width: 100%; }
+        .admin-learn-grid { grid-template-columns: 1fr; }
+        .admin-learn-card { padding: 18px; }
+        .admin-tabs { gap: 2px; padding: 3px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .admin-tabs::-webkit-scrollbar { display: none; }
+        .admin-tab { padding: 8px 12px; font-size: .8rem; }
+      }
+    </style>
+  </Show>
+</Layout>

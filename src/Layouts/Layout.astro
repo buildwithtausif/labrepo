@@ -1,0 +1,649 @@
+---
+import { Show, UserButton, SignInButton, SignUpButton } from '@clerk/astro/components'
+import { buildSEO, type SEOProps } from '../utils/seo'
+import AnnouncementBanner from '../components/AnnouncementBanner.tsx';
+
+interface Props {
+  title?: string;
+  showNav?: boolean;
+  seo?: SEOProps;
+}
+
+const { title, showNav = true, seo: customSeo } = Astro.props as Props
+
+const currentPath = Astro.url.pathname
+const seoProps = { ...customSeo }
+
+// Fetch dynamic SEO settings from backend (SSR)
+let dynamicSeo = {};
+try {
+  const backendUrl = process.env.INTERNAL_API_URL || process.env.API_URL || 'http://localhost:3001';
+  const res = await fetch(`${backendUrl}/api/public/seo`);
+  if (res.ok) {
+    const data = await res.json();
+    if (data.seo) dynamicSeo = data.seo;
+  }
+} catch(e) {
+  // Silent fallback
+}
+
+// Merge priority: Props -> DB Settings -> Defaults
+const finalSeoProps = { ...dynamicSeo, ...seoProps };
+if (title) finalSeoProps.title = title;
+const seo = buildSEO(finalSeoProps, currentPath)
+
+const auth = Astro.locals.auth ? Astro.locals.auth() : null;
+const userId = auth ? auth.userId : null;
+const isAdmin = userId && (userId === process.env.ADMIN_USER_ID || userId === process.env.CLERK_ADMIN_USER_ID);
+const isDev = process.env.ENV === 'development';
+const devRole = (Astro.locals as any).devRole || 'devadmin';
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    
+    <!-- Primary Meta Tags -->
+    <title>{seo.title}</title>
+    <meta name="title" content={seo.title} />
+    <meta name="description" content={seo.description} />
+    {seo.noindex && <meta name="robots" content="noindex, nofollow" />}
+    <link rel="canonical" href={seo.url} />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content={seo.type} />
+    <meta property="og:url" content={seo.url} />
+    <meta property="og:title" content={seo.title} />
+    <meta property="og:description" content={seo.description} />
+    <meta property="og:image" content={seo.image} />
+    <meta property="og:site_name" content={seo.siteName} />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content={seo.url} />
+    <meta property="twitter:title" content={seo.title} />
+    <meta property="twitter:description" content={seo.description} />
+    <meta property="twitter:image" content={seo.image} />
+    <meta name="twitter:creator" content={seo.twitterHandle} />
+
+    <!-- Structured Data (Schema.org) -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": seo.siteName,
+      "url": seo.url
+    })} />
+
+    {isDev && (
+      <script define:vars={{ mockUserId: userId, devRole }}>
+        window.__devRole = devRole;
+        window.Clerk = {
+          loaded: true,
+          isReady: () => true,
+          load: async () => {},
+          addListener: () => {},
+          session: {
+            getToken: async () => 'mock_token'
+          },
+          user: {
+            id: mockUserId || 'mock_dev_admin'
+          }
+        };
+      </script>
+    )}
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- Syntax Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+    <script is:inline defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script is:inline defer src="https://cdnjs.cloudflare.com/ajax/libs/highlightjs-line-numbers.js/2.8.0/highlightjs-line-numbers.min.js"></script>
+    <style>
+      .hawkins-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: linear-gradient(135deg, #d4af37 0%, #ffdf73 50%, #d4af37 100%);
+        color: #1a1a1a;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        box-shadow: 0 2px 8px rgba(212, 175, 55, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.8);
+        border: 1px solid #ffe699;
+        user-select: none;
+        margin-right: 12px;
+      }
+      .hawkins-badge i {
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <script is:inline>
+      (function() {
+        function updateHeaderBottom() {
+          const header = document.querySelector('.app-header');
+          if (header) {
+            document.documentElement.style.setProperty('--preview-top', header.getBoundingClientRect().bottom + 'px');
+          }
+        }
+        window.addEventListener('scroll', updateHeaderBottom, { passive: true });
+        window.addEventListener('resize', updateHeaderBottom, { passive: true });
+        document.addEventListener('DOMContentLoaded', () => {
+          updateHeaderBottom();
+          const observer = new MutationObserver(updateHeaderBottom);
+          observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+        });
+      })();
+    </script>
+    <AnnouncementBanner client:load />
+    {showNav && (
+      <header class="app-header">
+        <div class="app-header__inner">
+          <div class="app-header__left">
+            <a href="/dashboard" class="app-header__logo">
+              <span class="app-header__logo-icon"><i class="bi bi-bezier2"></i></span>
+              <span class="app-header__logo-text">LabRepo</span>
+              <span class="app-header__logo-tag hide-mobile">student workspace</span>
+            </a>
+          </div>
+          
+          <Show when="signed-in">
+            <nav class="app-header__nav hide-mobile">
+              <a href="/dashboard" class:list={["app-header__link", { active: currentPath === '/dashboard' }]}>
+                <i class="bi bi-grid-1x2"></i> Dashboard
+              </a>
+              <a href="/search" class:list={["app-header__link", { active: currentPath === '/search' }]}>
+                <i class="bi bi-search"></i> Search
+              </a>
+              <a href="/recycle-bin" class:list={["app-header__link", { active: currentPath === '/recycle-bin' }]}>
+                <i class="bi bi-trash3"></i> Recycle Bin
+              </a>
+            </nav>
+          </Show>
+
+          <div class="app-header__right">
+            {isDev ? (
+              <div style="display: flex; align-items: center; gap: 8px;">
+                {devRole === 'devadmin' ? (
+                  <div class="hawkins-badge" title="Dev Admin">
+                    <i class="bi bi-star-fill"></i> DevAdmin
+                  </div>
+                ) : (
+                  <div class="hawkins-badge" title="Test User" style="background: linear-gradient(135deg, #6b7280 0%, #9ca3af 50%, #6b7280 100%); box-shadow: 0 2px 8px rgba(107,114,128,0.4); border-color: #d1d5db;">
+                    <i class="bi bi-person"></i> TestUser
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <Show when="signed-out">
+                  <SignInButton mode="modal" fallbackRedirectUrl="/dashboard" forceRedirectUrl="/dashboard" asChild={true}>
+                    <button class="btn btn--dark-utility">Sign In</button>
+                  </SignInButton>
+                  <SignUpButton mode="modal" fallbackRedirectUrl="/dashboard" forceRedirectUrl="/dashboard" asChild={true}>
+                    <button class="btn btn--primary">Get Started</button>
+                  </SignUpButton>
+                </Show>
+                <Show when="signed-in">
+                  <div style="display: flex; align-items: center;">
+                    {isAdmin && (
+                      <div class="hawkins-badge" title="Hawkins Chief of Police (Admin)">
+                        <i class="bi bi-star-fill"></i> Chief
+                      </div>
+                    )}
+                    <UserButton />
+                  </div>
+                </Show>
+              </>
+            )}
+          </div>
+        </div>
+
+        <!-- Mobile nav -->
+        {isDev ? (
+          <nav class="app-header__mobile-nav hide-desktop">
+            <a href="/dashboard" class:list={["app-header__mobile-link", { active: currentPath === '/dashboard' }]}>
+              <span><i class="bi bi-grid-1x2"></i></span><small>Home</small>
+            </a>
+            <a href="/search" class:list={["app-header__mobile-link", { active: currentPath === '/search' }]}>
+              <span><i class="bi bi-search"></i></span><small>Search</small>
+            </a>
+            <a href="/recycle-bin" class:list={["app-header__mobile-link", { active: currentPath === '/recycle-bin' }]}>
+              <span><i class="bi bi-trash3"></i></span><small>Bin</small>
+            </a>
+          </nav>
+        ) : (
+          <Show when="signed-in">
+            <nav class="app-header__mobile-nav hide-desktop">
+              <a href="/dashboard" class:list={["app-header__mobile-link", { active: currentPath === '/dashboard' }]}>
+                <span><i class="bi bi-grid-1x2"></i></span><small>Home</small>
+              </a>
+              <a href="/search" class:list={["app-header__mobile-link", { active: currentPath === '/search' }]}>
+                <span><i class="bi bi-search"></i></span><small>Search</small>
+              </a>
+              <a href="/recycle-bin" class:list={["app-header__mobile-link", { active: currentPath === '/recycle-bin' }]}>
+                <span><i class="bi bi-trash3"></i></span><small>Bin</small>
+              </a>
+            </nav>
+          </Show>
+        )}
+      </header>
+    )}
+
+    <main class={showNav ? 'app-main' : 'app-main--full'}>
+      <slot />
+    </main>
+
+    <!-- Global Footer -->
+    <footer class="app-footer">
+        <div class="container text-center flex flex-col items-center gap-4">
+          <nav aria-label="Footer Navigation">
+            <ul class="footer-links">
+              <li>
+                <a href="https://github.com/buildwithtausif" target="_blank" rel="noopener noreferrer">
+                  Developed by Tausif Alam
+                </a>
+              </li>
+              <li class="hide-mobile" aria-hidden="true">&bull;</li>
+              <li>
+                <a href="/security-and-moderation">
+                  Security &amp; Moderation
+                </a>
+              </li>
+              <li class="hide-mobile" aria-hidden="true">&bull;</li>
+              <li>
+                <a href="/policy">
+                  Policy
+                </a>
+              </li>
+              <li class="hide-mobile" aria-hidden="true">&bull;</li>
+              <li>
+                <a href="/status">
+                  System Status
+                </a>
+              </li>
+              <li class="hide-mobile" aria-hidden="true">&bull;</li>
+              <li>
+                <a href="/contact" target="_blank">
+                  Contact Us
+                </a>
+              </li>
+            </ul>
+          </nav>
+          <p class="text-caption text-muted">&copy; 2026 LabRepo. All rights reserved.</p>
+        </div>
+      </footer>
+
+    <script src="../scripts/api.ts"></script>
+
+    {isDev && (
+      <div id="devmode-switcher" class="devmode-switcher">
+        <button id="devmode-toggle" class="devmode-toggle" aria-label="Dev Mode Switcher">
+          <i class="bi bi-bug"></i>
+        </button>
+        <div id="devmode-panel" class="devmode-panel" style="display: none;">
+          <div class="devmode-panel__title">Dev Mode</div>
+          <button class="devmode-option" data-role="devadmin">
+            <i class="bi bi-star-fill" style="color: #d4af37;"></i>
+            <span>DevAdmin</span>
+            <small>Full admin access</small>
+          </button>
+          <button class="devmode-option" data-role="testuser">
+            <i class="bi bi-person" style="color: #9ca3af;"></i>
+            <span>TestUser</span>
+            <small>Regular user (no admin)</small>
+          </button>
+          <div class="devmode-divider"></div>
+          <button class="devmode-option devmode-option--danger" data-role="clear">
+            <i class="bi bi-box-arrow-right"></i>
+            <span>Clear dev session</span>
+          </button>
+        </div>
+      </div>
+
+      <style>
+        .devmode-switcher {
+          position: fixed;
+          bottom: 20px;
+          left: 20px;
+          z-index: 99999;
+        }
+        .devmode-toggle {
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          border: 2px dashed #f59e0b;
+          background: rgba(30, 30, 30, 0.95);
+          color: #f59e0b;
+          font-size: 18px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: transform 150ms ease, box-shadow 150ms ease;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .devmode-toggle:hover {
+          transform: scale(1.1);
+          box-shadow: 0 6px 20px rgba(245, 158, 11, 0.3);
+        }
+        .devmode-panel {
+          position: absolute;
+          bottom: 54px;
+          left: 0;
+          width: 220px;
+          background: #1a1a1a;
+          border: 2px dashed #f59e0b;
+          border-radius: 12px;
+          padding: 8px;
+          box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+        }
+        .devmode-panel__title {
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.15em;
+          text-transform: uppercase;
+          color: #f59e0b;
+          padding: 6px 10px 4px;
+        }
+        .devmode-option {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          padding: 8px 10px;
+          border: none;
+          background: transparent;
+          color: #e5e5e5;
+          font-size: 13px;
+          cursor: pointer;
+          border-radius: 8px;
+          text-align: left;
+          transition: background 100ms ease;
+        }
+        .devmode-option:hover {
+          background: rgba(255,255,255,0.08);
+        }
+        .devmode-option[data-active="true"] {
+          background: rgba(245, 158, 11, 0.15);
+          outline: 1px solid rgba(245, 158, 11, 0.4);
+        }
+        .devmode-option span {
+          font-weight: 600;
+        }
+        .devmode-option small {
+          display: block;
+          font-size: 10px;
+          color: #888;
+          font-weight: 400;
+          margin-left: auto;
+        }
+        .devmode-option--danger { color: #ff6b6b; }
+        .devmode-divider {
+          height: 1px;
+          background: rgba(255,255,255,0.08);
+          margin: 4px 0;
+        }
+        @media (max-width: 768px) {
+          .devmode-switcher {
+            bottom: 80px;
+          }
+        }
+      </style>
+
+      <script is:inline>
+        (function() {
+          var toggle = document.getElementById('devmode-toggle');
+          var panel = document.getElementById('devmode-panel');
+          if (!toggle || !panel) return;
+
+          // Read current role from cookie
+          function getCurrentRole() {
+            var m = document.cookie.match(/devmode_role=(devadmin|testuser)/);
+            return m ? m[1] : 'devadmin';
+          }
+
+          function setRole(role) {
+            document.cookie = 'devmode_role=' + role + '; path=/; SameSite=Lax; max-age=31536000';
+            localStorage.setItem('devmode_role', role);
+          }
+
+          // Mark the active option
+          function updateActive() {
+            var current = getCurrentRole();
+            panel.querySelectorAll('.devmode-option[data-role]').forEach(function(btn) {
+              btn.setAttribute('data-active', btn.getAttribute('data-role') === current ? 'true' : 'false');
+            });
+          }
+
+          // Toggle panel
+          toggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var isOpen = panel.style.display !== 'none';
+            panel.style.display = isOpen ? 'none' : 'block';
+            if (!isOpen) updateActive();
+          });
+
+          document.addEventListener('click', function(e) {
+            if (!panel.contains(e.target) && e.target !== toggle) {
+              panel.style.display = 'none';
+            }
+          });
+
+          // Handle option clicks
+          panel.querySelectorAll('.devmode-option').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              var role = btn.getAttribute('data-role');
+              if (role === 'clear') {
+                document.cookie = 'devmode_role=; path=/; max-age=0';
+                localStorage.removeItem('devmode_role');
+                window.location.reload();
+                return;
+              }
+              setRole(role);
+              window.location.reload();
+            });
+          });
+
+          // Sync from localStorage on load (handles cross-tab sync)
+          var stored = localStorage.getItem('devmode_role');
+          if (stored && stored !== getCurrentRole()) {
+            setRole(stored);
+            window.location.reload();
+          }
+        })();
+      </script>
+    )}
+  </body>
+</html>
+
+<style is:global>
+  @import '../styles/global.css';
+
+  /* App shell */
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-app-header);
+    background: var(--color-nav-bg);
+    backdrop-filter: blur(18px);
+    padding: 13px 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  .app-header__inner {
+    width: 100%;
+    max-width: 1240px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 100%;
+  }
+
+  .app-header__left {
+    display: flex;
+    align-items: center;
+  }
+
+  .app-header__logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: var(--color-ink);
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -.04em;
+  }
+
+  .app-header__logo-icon {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    color: white;
+    background: var(--color-primary);
+    border-radius: 9px;
+    font-size: 16px;
+  }
+
+  .app-header__logo-tag { color: var(--color-ink-muted); font: 400 11px var(--font-body); letter-spacing: .02em; }
+
+  .app-header__nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .app-header__link {
+    font-family: var(--font-body);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 11px;
+    border-radius: 9px;
+    font-size: 13px;
+    color: var(--color-ink-muted);
+    text-decoration: none;
+    letter-spacing: -0.12px;
+    transition: color var(--transition-fast);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+  }
+
+  .app-header__link:hover, .app-header__link.active {
+    color: var(--color-ink);
+    background: rgba(255,255,255,.07);
+  }
+
+  .app-header__link.active { color: #fff; background: var(--color-primary-soft); }
+
+  .app-header__right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Mobile nav */
+  .app-header__mobile-nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background: rgba(21, 22, 26, .96);
+    padding: 8px 12px;
+    margin-top: 13px;
+    border-top: 1px solid var(--color-divider);
+  }
+
+  .app-header__mobile-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-width: 64px;
+    padding: 5px 10px;
+    border-radius: 9px;
+    font-size: 17px;
+    color: var(--color-ink-muted);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+
+  .app-header__mobile-link.active {
+    color: #fff;
+    background: var(--color-primary-soft);
+  }
+
+  .app-header__mobile-link small { font-size: 10px; font-family: var(--font-body); }
+
+  /* Main content */
+  .app-main {
+    min-height: calc(100vh - 58px);
+    position: relative;
+  }
+
+  .app-main--full {
+    min-height: 100vh;
+    position: relative;
+  }
+  
+  /* Footer */
+  .app-footer {
+    padding: 32px 0;
+  }
+
+  .footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    color: var(--color-ink-muted);
+    font-size: .82rem;
+  }
+  
+  .footer-links a {
+    color: var(--color-ink-muted);
+    transition: color var(--transition-fast);
+  }
+  
+  .footer-links a:hover {
+    color: white;
+  }
+
+  @media (min-width: 900px) {
+    body:has(#dashboard-page) .app-header__nav { display: none; }
+  }
+
+  @media (max-width: 540px) {
+    .app-header { padding: 10px 0; }
+    .app-header__inner { padding: 0 12px; }
+    .app-header__logo { gap: 7px; font-size: 15px; }
+    .app-header__logo-icon { width: 28px; height: 28px; border-radius: 8px; font-size: 14px; }
+    .app-header__right { gap: 6px; }
+    .app-header__right .btn { min-height: 38px; padding: 8px 11px; font-size: .8rem; white-space: nowrap; }
+  }
+
+  @media (max-width: 390px) {
+    .app-header__logo { font-size: 14px; }
+    .app-header__right .btn { padding-inline: 9px; font-size: .74rem; }
+  }
+</style>

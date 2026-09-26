@@ -1,0 +1,158 @@
+---
+import Layout from '../Layouts/Layout.astro';
+---
+
+<Layout title="Security & Moderation" showNav={true}>
+  <main class="security-page">
+    <div class="container security-page__container">
+      <section class="security-hero" aria-labelledby="security-title">
+        <p class="security-hero__eyebrow">Transparency</p>
+        <h1 id="security-title" class="security-hero__title">Security &amp; moderation</h1>
+        <p class="security-hero__summary">LabRepo uses a lightweight moderation layer to protect student work, reduce abuse, and keep the platform trustworthy.</p>
+      </section>
+
+      <section class="security-grid" aria-label="Moderation details">
+        <article class="security-item">
+          <h2 class="security-item__title"><i class="bi bi-speedometer2 mr-2"></i> Upload Limits &amp; Bursts</h2>
+          <p class="security-item__copy">To ensure fair usage, we enforce two distinct upload constraints:</p>
+          <ul class="security-item__list">
+            <li><strong>Rate Limit (35/min):</strong> A standard API rate limit that blocks the 36th upload attempt within a single minute. This simply returns a "Too Many Requests" error to pace your uploads.</li>
+            <li><strong>Abuse Flag (50/min):</strong> An automated moderation rule that triggers if you successfully upload 50 files within 60 seconds. This is considered an <strong>Upload Burst</strong> and indicates potential spam. Hitting this limit flags your account for admin review.</li>
+          </ul>
+        </article>
+
+        <article class="security-item">
+          <h2 class="security-item__title"><i class="bi bi-slash-circle mr-2 text-danger"></i> Account Suspensions</h2>
+          <p class="security-item__copy">Accounts flagged for abusive behavior (such as extreme upload bursts or repeated login attacks) may be suspended by an administrator.</p>
+          <ul class="security-item__list" style="list-style-type: none; padding-left: 0;">
+            <li class="mb-2"><i class="bi bi-shield-lock text-primary mr-2"></i> <strong>If Suspended:</strong> You will retain read-only access to view and download your existing files. However, you will be blocked from creating new sessions, subjects, and works, uploading new files, or modifying and deleting any existing data. A reason for the suspension will be displayed on your dashboard.</li>
+            <li class="mb-2"><i class="bi bi-envelope text-primary mr-2"></i> <strong>Appeals:</strong> If you believe your suspension was a mistake, you can contact support with your User ID to request a manual review and restoration of privileges.</li>
+            <li><i class="bi bi-exclamation-triangle text-danger mr-2"></i> <strong>Hard Deletion:</strong> Suspended accounts that violate our most severe policies may be subjected to a Hard Delete by administrators. This irrevocably wipes all files and data associated with the account from the platform.</li>
+          </ul>
+        </article>
+
+        <article class="security-item">
+          <h2 class="security-item__title"><i class="bi bi-journal-text mr-2"></i> Why we log activity</h2>
+          <p class="security-item__copy">We record key events such as logins, uploads, downloads, and admin actions so we can investigate issues, identify malicious actors, and maintain a secure history.</p>
+        </article>
+
+        <article class="security-item">
+          <h2 class="security-item__title"><i class="bi bi-shield-check mr-2 text-success"></i> Your privacy</h2>
+          <p class="security-item__copy">Private security data and metadata (like file size and names) are stored server-side and never sold. We do not inspect the contents of your academic files.</p>
+        </article>
+      </section>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .security-page {
+    padding-block: clamp(36px, 6vw, 72px) clamp(64px, 8vw, 108px);
+  }
+
+  .security-page__container {
+    width: min(100% - 36px, 1080px);
+  }
+
+  .security-hero {
+    position: relative;
+    border: 1px solid var(--color-divider);
+    border-radius: 22px;
+    padding: clamp(24px, 4vw, 42px);
+    background:
+      radial-gradient(circle at 92% 0%, rgba(197, 27, 27, 0.19), transparent 45%),
+      linear-gradient(155deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.02));
+    box-shadow: var(--shadow-soft);
+  }
+
+  .security-hero__eyebrow {
+    color: var(--color-primary-on-dark);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .security-hero__title {
+    margin-top: 10px;
+    font-size: clamp(2rem, 4.3vw, 3.2rem);
+    letter-spacing: -0.04em;
+    line-height: 1.02;
+  }
+
+  .security-hero__summary {
+    margin-top: 16px;
+    max-width: 66ch;
+    color: var(--color-ink-muted);
+    font-size: clamp(1rem, 1.4vw, 1.3rem);
+    line-height: 1.62;
+  }
+
+  .security-grid {
+    display: grid;
+    gap: 14px;
+    margin-top: clamp(18px, 3vw, 28px);
+  }
+
+  .security-item {
+    border: 1px solid var(--color-divider);
+    border-radius: 18px;
+    padding: clamp(18px, 2.8vw, 28px);
+    background: rgba(255, 255, 255, 0.04);
+    transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+  }
+
+  .security-item:hover {
+    border-color: rgba(255, 113, 113, 0.42);
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-2px);
+  }
+
+  .security-item__title {
+    font-size: clamp(1.45rem, 2.7vw, 2.1rem);
+    letter-spacing: -0.028em;
+  }
+
+  .security-item__copy {
+    margin-top: 12px;
+    max-width: 76ch;
+    color: var(--color-ink-muted);
+    line-height: 1.7;
+    font-size: clamp(1rem, 1.2vw, 1.18rem);
+  }
+
+  .security-item__list {
+    margin-top: 12px;
+    padding-left: 20px;
+    color: var(--color-ink-muted);
+    line-height: 1.6;
+    font-size: clamp(0.95rem, 1.15vw, 1.1rem);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .security-item__list li::marker {
+    color: var(--color-primary);
+  }
+
+  @media (max-width: 767px) {
+    .security-page__container {
+      width: min(100% - 24px, 1080px);
+    }
+
+    .security-grid {
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .security-item {
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .security-item__copy {
+      line-height: 1.62;
+    }
+  }
+</style>

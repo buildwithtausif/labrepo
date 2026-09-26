@@ -1,0 +1,383 @@
+---
+import Layout from "../../Layouts/Layout.astro";
+
+const { userId } = Astro.locals.auth();
+if (!userId) {
+  return Astro.redirect("/");
+}
+
+const { id } = Astro.params;
+---
+
+<Layout title="Session">
+    <div class="container page-content" id="session-page" data-session-id={id}>
+      <div id="page-loading" class="empty-state">
+        <div class="spinner spinner--lg"></div>
+      </div>
+
+      <div id="page-content" style="display: none;">
+        <!-- Breadcrumb -->
+        <nav class="breadcrumb" id="breadcrumb">
+          <a href="/dashboard">Dashboard</a>
+          <span class="breadcrumb__separator">›</span>
+          <span id="session-name-crumb" class="text-ink">Session</span>
+        </nav>
+
+        <!-- Header -->
+        <div class="page-header flex items-center justify-between mb-8">
+          <div>
+            <h1 id="session-title" class="text-display-lg">
+              Session
+            </h1>
+            <p id="session-stats" class="text-muted mt-2"></p>
+          </div>
+          <div class="flex gap-4 flex-wrap">
+            <button
+              class="btn btn--secondary-pill"
+              id="btn-download-session"
+              title="Download all"
+            >
+              <i class="bi bi-download"></i> Download ZIP
+            </button>
+            <button class="btn btn--primary" id="btn-new-subject">
+              + New Subject
+            </button>
+          </div>
+        </div>
+
+        <!-- Subjects -->
+        <div
+          id="subjects-grid"
+          class="grid grid-cols-1 md:grid-cols-3 gap-6"
+        >
+        </div>
+
+        <div id="subjects-empty" class="empty-state" style="display: none;">
+          <div class="text-hero text-muted mb-4"><i class="bi bi-book"></i></div>
+          <h3 class="text-display-lg mb-2">No subjects yet</h3>
+          <p class="text-lead text-muted mb-8">
+            Add your first subject to start organizing your work.
+          </p>
+          <button class="btn btn--primary" id="btn-empty-new-subject"
+            >Add Subject</button
+          >
+        </div>
+      </div>
+    </div>
+
+    <!-- Subject Modal -->
+    <div id="subject-modal" class="modal-overlay" style="display: none;">
+      <div class="modal">
+        <h3 class="text-body-strong mb-4" id="subject-modal-title">New Subject</h3>
+        <input
+          type="text"
+          class="input"
+          id="subject-name-input"
+          placeholder="e.g., Machine Learning"
+          autocomplete="off"
+        />
+        <div class="flex justify-between gap-4 mt-8">
+          <button class="btn btn--ghost" id="subject-modal-cancel"
+            >Cancel</button
+          >
+          <button class="btn btn--primary" id="subject-modal-save"
+            >Add Subject</button
+          >
+        </div>
+      </div>
+    </div>
+
+    <!-- Rename Modal -->
+    <div id="rename-modal" class="modal-overlay" style="display: none;">
+      <div class="modal">
+        <h3 class="text-body-strong mb-4">Rename Subject</h3>
+        <input
+          type="text"
+          class="input"
+          id="rename-input"
+          placeholder="New name"
+          autocomplete="off"
+        />
+        <div class="flex justify-between gap-4 mt-8">
+          <button class="btn btn--ghost" id="rename-cancel">Cancel</button>
+          <button class="btn btn--primary" id="rename-save">Rename</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", async () => {
+        const api = (window as any).__labrepo_api;
+        const showToast = (window as any).__labrepo_showToast;
+        const downloadBlob = (window as any).__labrepo_downloadBlob;
+        const formatSize = (window as any).__labrepo_formatSize;
+
+        await new Promise<void>((r) => {
+          const c = () => {
+            if ((window as any).Clerk?.session) r();
+            else setTimeout(c, 100);
+          };
+          c();
+        });
+
+        const sessionId = parseInt(
+          document.getElementById("session-page")!.dataset.sessionId || "0",
+        );
+
+        // Load session details
+        let session: any;
+        try {
+          const result = await api.getSession(sessionId);
+          session = result.session;
+        } catch {
+          showToast("Session not found", "error");
+          window.location.href = "/dashboard";
+          return;
+        }
+
+        document.getElementById("session-title")!.textContent = session.name;
+        document.getElementById("session-name-crumb")!.textContent =
+          session.name;
+        document.title = `${session.name} | LabRepo`;
+
+        await loadSubjects();
+
+        async function loadSubjects() {
+          try {
+            const { subjects } = await api.getSubjects(sessionId);
+
+            document.getElementById("page-loading")!.style.display = "none";
+            document.getElementById("page-content")!.style.display = "block";
+
+            if (subjects.length === 0) {
+              document.getElementById("subjects-grid")!.style.display = "none";
+              document.getElementById("subjects-empty")!.style.display = "flex";
+            } else {
+              document.getElementById("subjects-grid")!.style.display = "grid";
+              document.getElementById("subjects-empty")!.style.display = "none";
+              renderSubjects(subjects);
+            }
+
+            const totalFiles = subjects.reduce(
+              (a: number, s: any) => a + (s.file_count || 0),
+              0,
+            );
+            const totalSize = subjects.reduce(
+              (a: number, s: any) => a + (s.total_size || 0),
+              0,
+            );
+            document.getElementById("session-stats")!.textContent =
+              `${subjects.length} subject${subjects.length !== 1 ? "s" : ""} · ${totalFiles} file${totalFiles !== 1 ? "s" : ""} · ${formatSize(totalSize)}`;
+          } catch (e: any) {
+            showToast("Failed to load subjects", "error");
+          }
+        }
+
+        function renderSubjects(subjects: any[]) {
+          const grid = document.getElementById("subjects-grid")!;
+          grid.innerHTML = subjects
+            .map(
+              (sub: any) => `
+            <div class="store-utility-card animate-fade-in" style="cursor: pointer;" onclick="window.location.href='/subject/${sub.id}'">
+              <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <span class="text-display-lg text-muted"><i class="bi bi-book"></i></span>
+                <div class="card-actions flex gap-2 shrink-0" onclick="event.stopPropagation();">
+                  <button class="btn btn--ghost btn-rename btn--sm" data-id="${sub.id}" data-name="${sub.name}" title="Rename"><i class="bi bi-pencil"></i></button>
+                  <button class="btn btn--ghost btn-delete btn--sm" data-id="${sub.id}" data-name="${sub.name}" title="Delete" style="color: #ff3b30;"><i class="bi bi-trash3"></i></button>
+                </div>
+              </div>
+              <h3 class="text-body-strong mb-2">${sub.name}</h3>
+              <div class="flex gap-4 text-caption text-muted">
+                <span>${sub.work_count || 0} work${sub.work_count !== 1 ? "s" : ""}</span>
+                <span>${sub.file_count || 0} file${sub.file_count !== 1 ? "s" : ""}</span>
+                <span>${formatSize(sub.total_size || 0)}</span>
+              </div>
+            </div>
+          `,
+            )
+            .join("");
+
+          grid.querySelectorAll(".btn-rename").forEach((btn: any) => {
+            btn.addEventListener("click", (e: Event) => {
+              e.stopPropagation();
+              renameSubjectId = parseInt(btn.dataset.id);
+              (
+                document.getElementById("rename-input") as HTMLInputElement
+              ).value = btn.dataset.name;
+              document.getElementById("rename-modal")!.style.display = "flex";
+            });
+          });
+
+          grid.querySelectorAll(".btn-delete").forEach((btn: any) => {
+            btn.addEventListener("click", async (e: Event) => {
+              e.stopPropagation();
+              if (
+                confirm(
+                  `Delete "${btn.dataset.name}"? It will be moved to recycle bin.`,
+                )
+              ) {
+                try {
+                  await api.deleteSubject(parseInt(btn.dataset.id));
+                  showToast("Subject moved to recycle bin", "success");
+                  await loadSubjects();
+                } catch (err: any) {
+                  showToast(err.message, "error");
+                }
+              }
+            });
+          });
+        }
+
+        // New subject modal
+        const modal = document.getElementById("subject-modal")!;
+        const input = document.getElementById(
+          "subject-name-input",
+        ) as HTMLInputElement;
+
+        function openModal() {
+          modal.style.display = "flex";
+          input.value = "";
+          input.focus();
+        }
+        document
+          .getElementById("btn-new-subject")!
+          .addEventListener("click", openModal);
+        document
+          .getElementById("btn-empty-new-subject")?.addEventListener("click", openModal);
+        document
+          .getElementById("subject-modal-cancel")!
+          .addEventListener("click", () => {
+            modal.style.display = "none";
+          });
+        modal.addEventListener("click", (e) => {
+          if (e.target === modal) modal.style.display = "none";
+        });
+
+        document
+          .getElementById("subject-modal-save")!
+          .addEventListener("click", async () => {
+            const name = input.value.trim();
+            if (!name) {
+              showToast("Enter a subject name", "warning");
+              return;
+            }
+            try {
+              await api.createSubject(sessionId, name);
+              showToast("Subject created!", "success");
+              modal.style.display = "none";
+              await loadSubjects();
+            } catch (err: any) {
+              showToast(err.message, "error");
+            }
+          });
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter")
+            document.getElementById("subject-modal-save")!.click();
+          if (e.key === "Escape") modal.style.display = "none";
+        });
+
+        // Rename
+        let renameSubjectId: number | null = null;
+        const renameModal = document.getElementById("rename-modal")!;
+        const renameInput = document.getElementById(
+          "rename-input",
+        ) as HTMLInputElement;
+
+        document
+          .getElementById("rename-cancel")!
+          .addEventListener("click", () => {
+            renameModal.style.display = "none";
+          });
+        renameModal.addEventListener("click", (e) => {
+          if (e.target === renameModal) renameModal.style.display = "none";
+        });
+
+        document
+          .getElementById("rename-save")!
+          .addEventListener("click", async () => {
+            if (!renameSubjectId) return;
+            const name = renameInput.value.trim();
+            if (!name) {
+              showToast("Name cannot be empty", "warning");
+              return;
+            }
+            try {
+              await api.updateSubject(renameSubjectId, name);
+              showToast("Subject renamed", "success");
+              renameModal.style.display = "none";
+              await loadSubjects();
+            } catch (err: any) {
+              showToast(err.message, "error");
+            }
+          });
+
+        renameInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter")
+            document.getElementById("rename-save")!.click();
+          if (e.key === "Escape") renameModal.style.display = "none";
+        });
+
+        // Download session ZIP
+        document
+          .getElementById("btn-download-session")!
+          .addEventListener("click", async () => {
+            try {
+              showToast("Preparing download...", "info");
+              const blob = await api.downloadSession(sessionId);
+              downloadBlob(blob, `${session.name}.zip`);
+              showToast("Download started!", "success");
+            } catch (err: any) {
+              showToast(err.message, "error");
+            }
+          });
+      });
+    </script>
+
+    <style>
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 80px 0;
+      }
+      .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--color-divider);
+        border-top-color: var(--color-primary);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        margin-bottom: var(--space-4);
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .card-actions {
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+      }
+      .store-utility-card:hover .card-actions {
+        opacity: 1;
+      }
+      
+      .mb-2 { margin-bottom: 8px; }
+      .mb-4 { margin-bottom: 17px; }
+      .mb-8 { margin-bottom: 32px; }
+      .mt-2 { margin-top: 8px; }
+      .mt-8 { margin-top: 32px; }
+
+      @media (max-width: 768px) {
+        .page-header {
+          flex-direction: column;
+          align-items: flex-start !important;
+          gap: var(--space-4);
+        }
+        .card-actions {
+          opacity: 1;
+        }
+      }
+    </style>
+</Layout>

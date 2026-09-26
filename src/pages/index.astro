@@ -1,0 +1,109 @@
+---
+import Layout from "../Layouts/Layout.astro";
+import { SignUpButton } from "@clerk/astro/components";
+
+const { userId } = Astro.locals.auth();
+if (userId) {
+  return Astro.redirect("/dashboard");
+}
+---
+
+<Layout title="Your lab work, in one reliable place">
+    <div class="landing">
+      <section class="hero-section">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow"><span></span> Built for practical coursework</p>
+            <h1 class="text-hero">Your lab work,<br /><em>always within reach.</em></h1>
+            <p class="hero-lead">A calm, secure workspace for the code, reports, notebooks, and datasets you build throughout the semester.</p>
+            <div class="hero-actions">
+              <SignUpButton mode="modal" forceRedirectUrl="/dashboard" asChild={true}>
+                <a href="#" id="hero-signup" class="btn btn--primary">Start your repository <i class="bi bi-arrow-right"></i></a>
+              </SignUpButton>
+              <a href="#how-it-works" class="text-link">See how it works <i class="bi bi-arrow-down"></i></a>
+            </div>
+            <div class="hero-proof">
+              <span><i class="bi bi-shield-check"></i> Private by default</span>
+              <span><i class="bi bi-cloud-check"></i> Files stay organized</span>
+            </div>
+          </div>
+
+          <div class="hero-product" aria-label="LabRepo workspace preview">
+            <div class="product-glow"></div>
+            <div class="product-window">
+              <div class="window-top"><span class="window-mark"><i class="bi bi-bezier2"></i></span><span>LabRepo</span><div class="window-dots"><b></b><b></b><b></b></div></div>
+              <div class="window-body">
+                <aside><span class="aside-title">WORKSPACE</span><div class="aside-active"><i class="bi bi-grid-1x2"></i> Overview</div><div><i class="bi bi-folder2"></i> Sessions</div><div><i class="bi bi-search"></i> Search</div><div><i class="bi bi-trash3"></i> Recycle Bin</div></aside>
+                <div class="mock-main">
+                  <div class="mock-heading"><div><small>GOOD AFTERNOON</small><strong>Your coursework, sorted.</strong></div><button><i class="bi bi-plus-lg"></i> New session</button></div>
+                  <div class="mock-stats"><span><b>03</b> Sessions</span><span><b>12</b> Subjects</span><span><b>48</b> Files</span></div>
+                  <div class="mock-card"><div class="mock-card__title"><span class="mock-icon"><i class="bi bi-calendar3"></i></span><div><b>2026–2027</b><small>6 subjects · 24 files</small></div><i class="bi bi-arrow-up-right"></i></div><div class="mock-files"><span><i class="bi bi-filetype-py"></i> training_model.py</span><span><i class="bi bi-file-earmark-text"></i> lab_report.pdf</span></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="floating-file file-one"><i class="bi bi-filetype-py"></i><span>experiment.py</span></div>
+            <div class="floating-file file-two"><i class="bi bi-file-earmark-bar-graph"></i><span>results.csv</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="how-it-works" class="workflow-section">
+        <div class="container">
+          <div class="section-heading"><p class="eyebrow">ONE CLEAR SYSTEM</p><h2 class="text-display-lg">From class to archive in four steps.</h2><p class="text-lead">Save every practical the same way, so the file you need is never hiding in a chat, USB drive, or downloads folder.</p></div>
+          <ol class="workflow-grid">
+            <li><span class="workflow-no">01</span><i class="bi bi-calendar3"></i><h3>Create a session</h3><p>Start with the academic year, then keep each semester’s work in one place.</p></li>
+            <li><span class="workflow-no">02</span><i class="bi bi-book"></i><h3>Add subjects</h3><p>Give every course a dedicated home, ready for its practical work.</p></li>
+            <li><span class="workflow-no">03</span><i class="bi bi-file-earmark-code"></i><h3>Capture each work</h3><p>Make a work entry for every experiment, assignment, or evaluation.</p></li>
+            <li><span class="workflow-no">04</span><i class="bi bi-cloud-arrow-up"></i><h3>Upload once</h3><p>Preview code anywhere, download it when you need it, and keep moving.</p></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="features-section">
+        <div class="container feature-layout">
+          <div class="feature-copy"><p class="eyebrow">DESIGNED FOR THE DEADLINE</p><h2 class="text-display-lg">Less file hunting.<br />More building.</h2><p class="text-lead">LabRepo is intentionally simple: predictable organization, fast retrieval, and protection against accidental deletion.</p><a href="#" id="feature-signup" class="btn btn--secondary-pill">Make your first workspace <i class="bi bi-arrow-right"></i></a></div>
+          <div class="feature-stack">
+            <article><span><i class="bi bi-code-slash"></i></span><div><h3>Read code in the browser</h3><p>Syntax-highlighted previews for source and text files—no download needed.</p></div></article>
+            <article><span><i class="bi bi-search-heart"></i></span><div><h3>Find a file in seconds</h3><p>Search filenames, subjects, and work titles with useful filters.</p></div></article>
+            <article><span><i class="bi bi-arrow-counterclockwise"></i></span><div><h3>A safety net for mistakes</h3><p>Deleted work stays recoverable in your recycle bin for seven days.</p></div></article>
+            <article><span><i class="bi bi-file-earmark-zip"></i></span><div><h3>Take everything with you</h3><p>Export a work, subject, session, or full account as a ZIP when it counts.</p></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="final-cta"><div class="container container--narrow"><p class="eyebrow">YOUR NEXT PRACTICAL STARTS HERE</p><h2 class="text-display-lg">Build your repository before you need to recover it.</h2><p>Set up your workspace in under a minute. Your first session is waiting.</p><a href="#" id="cta-signup" class="btn btn--primary">Create free workspace <i class="bi bi-arrow-right"></i></a></div></section>
+    </div>
+</Layout>
+
+<script>
+  ["hero-signup", "feature-signup", "cta-signup"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("click", (event) => {
+      event.preventDefault();
+      (window as any).Clerk?.openSignUp({ fallbackRedirectUrl: "/dashboard", forceRedirectUrl: "/dashboard" });
+    });
+  });
+</script>
+
+<style>
+  .hero-section { position: relative; overflow: hidden; padding: clamp(68px, 10vw, 128px) 0 100px; }
+  .hero-section::before { content: ""; position: absolute; width: 530px; height: 530px; right: -230px; top: -240px; border: 1px solid rgba(255,255,255,.08); border-radius: 50%; box-shadow: 0 0 0 72px rgba(255,255,255,.018), 0 0 0 144px rgba(255,255,255,.014); }
+  .hero-grid { position: relative; display: grid; grid-template-columns: 1fr 1.05fr; align-items: center; gap: clamp(34px, 6vw, 92px); }
+  .hero-copy { max-width: 590px; }
+  .eyebrow { display: flex; align-items: center; gap: 8px; color: var(--color-primary-on-dark); font: 700 .72rem var(--font-body); letter-spacing: .13em; }
+  .eyebrow span { width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary); box-shadow: 0 0 0 5px var(--color-primary-soft); }
+  .hero-copy h1 { margin: 20px 0 22px; }.hero-copy h1 em { color: var(--color-primary-on-dark); font-style: normal; }
+  .hero-lead { max-width: 530px; color: var(--color-ink-muted); font-size: 1.08rem; line-height: 1.75; }
+  .hero-actions { display: flex; align-items: center; gap: 22px; margin-top: 32px; }.hero-actions .btn { min-height: 50px; padding-inline: 21px; }.text-link { color: var(--color-ink-muted); font-size: .9rem; font-weight: 700; }.text-link:hover { color: white; }.text-link i { margin-left: 5px; font-size: .8rem; }
+  .hero-proof { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 27px; color: var(--color-ink-muted); font-size: .79rem; }.hero-proof i { color: var(--color-success); margin-right: 5px; }
+  .hero-product { position: relative; min-height: 390px; }.product-glow { position: absolute; inset: 20% 12%; background: rgba(197,27,27,.28); filter: blur(65px); }
+  .product-window { position: relative; z-index: 1; overflow: hidden; width: min(100%, 600px); margin: 0 auto; background: #1a1b20; border: 1px solid rgba(255,255,255,.14); border-radius: 16px; box-shadow: 0 30px 80px rgba(0,0,0,.44); transform: perspective(1200px) rotateY(-7deg) rotateX(3deg); }
+  .window-top { display: flex; align-items: center; gap: 8px; height: 47px; padding: 0 15px; border-bottom: 1px solid rgba(255,255,255,.09); color: #e3e2e0; font: 600 .76rem var(--font-display); }.window-mark { display: grid; place-items: center; width: 22px; height: 22px; background: var(--color-primary); border-radius: 6px; color: white; }.window-dots { display: flex; gap: 5px; margin-left: auto; }.window-dots b { width: 6px; height: 6px; background: #65656c; border-radius: 50%; }
+  .window-body { display: grid; grid-template-columns: 145px 1fr; min-height: 328px; } .window-body aside { padding: 18px 10px; background: rgba(0,0,0,.2); color: #96959d; font-size: .7rem; }.aside-title { display: block; padding: 0 8px 12px; color: #696870; font-size: .58rem; letter-spacing: .12em; }.window-body aside div { display: flex; gap: 8px; align-items: center; padding: 7px 8px; margin-bottom: 3px; border-radius: 6px; }.window-body aside .aside-active { color: white; background: rgba(197,27,27,.22); }.window-body aside i { font-size: .75rem; }
+  .mock-main { padding: 21px; }.mock-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }.mock-heading small { display: block; color: #a37a7a; font-size: .55rem; letter-spacing: .1em; }.mock-heading strong { display: block; margin-top: 3px; color: #fff; font: 600 .98rem var(--font-display); letter-spacing: -.04em; }.mock-heading button { padding: 6px 8px; border: 0; border-radius: 6px; color: white; background: var(--color-primary); font-size: .62rem; }.mock-stats { display: flex; gap: 7px; margin: 18px 0; }.mock-stats span { flex: 1; padding: 8px; border: 1px solid rgba(255,255,255,.08); border-radius: 7px; color: #8f8e95; font-size: .56rem; }.mock-stats b { display: block; color: white; font-size: .9rem; }.mock-card { padding: 12px; background: linear-gradient(130deg, rgba(255,255,255,.1), rgba(255,255,255,.035)); border: 1px solid rgba(255,255,255,.09); border-radius: 9px; }.mock-card__title { display: flex; align-items: center; gap: 8px; }.mock-card__title > i { margin-left: auto; color: #8b8a91; font-size: .7rem; }.mock-icon { display: grid; place-items: center; width: 29px; height: 29px; color: #ff9b9b; background: var(--color-primary-soft); border-radius: 8px; }.mock-card b,.mock-card small { display: block; }.mock-card b { color: white; font-size: .7rem; }.mock-card small { margin-top: 2px; color: #94939a; font-size: .56rem; }.mock-files { display: flex; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.07); color: #a9a8ae; font-size: .55rem; }.mock-files i { color: #ff8d8d; }
+  .floating-file { position: absolute; z-index: 2; display: flex; align-items: center; gap: 7px; padding: 8px 11px; color: #ddd; background: rgba(37,38,43,.88); border: 1px solid rgba(255,255,255,.14); border-radius: 8px; box-shadow: 0 14px 28px rgba(0,0,0,.3); font: 700 .64rem var(--font-body); backdrop-filter: blur(8px); }.floating-file i { color: #ff7777; font-size: .87rem; }.file-one { top: 15px; right: -20px; }.file-two { bottom: 8px; left: -14px; }
+  .workflow-section { padding: 96px 0; background: rgba(0,0,0,.14); border-block: 1px solid var(--color-divider); }.section-heading { max-width: 660px; }.section-heading h2 { margin: 16px 0; }.workflow-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 0; margin: 46px 0 0; list-style: none; }.workflow-grid li { position: relative; padding: 22px; min-height: 220px; border: 1px solid var(--color-divider); border-radius: var(--radius-md); background: rgba(255,255,255,.025); }.workflow-grid li > i { display: block; margin: 27px 0 18px; color: var(--color-primary-on-dark); font-size: 1.25rem; }.workflow-grid h3 { font-size: 1rem; }.workflow-grid p { margin-top: 8px; color: var(--color-ink-muted); font-size: .84rem; line-height: 1.55; }.workflow-no { color: #79787f; font: 700 .67rem var(--font-body); letter-spacing: .09em; }
+  .features-section { padding: 110px 0; }.feature-layout { display: grid; grid-template-columns: .85fr 1.15fr; align-items: center; gap: clamp(40px, 9vw, 136px); }.feature-copy h2 { margin: 15px 0 19px; }.feature-copy .btn { margin-top: 28px; }.feature-stack { display: grid; gap: 11px; }.feature-stack article { display: flex; align-items: flex-start; gap: 16px; padding: 18px; border: 1px solid var(--color-divider); border-radius: 14px; background: rgba(255,255,255,.025); }.feature-stack article span { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; border-radius: 10px; color: #ff9494; background: var(--color-primary-soft); font-size: 1rem; }.feature-stack h3 { font: 600 .96rem var(--font-display); }.feature-stack p { margin-top: 4px; color: var(--color-ink-muted); font-size: .82rem; line-height: 1.5; }
+  .final-cta { padding: 100px 0; text-align: center; background: linear-gradient(110deg, #811313, #c51b1b 52%, #971515); }.final-cta .eyebrow { justify-content: center; color: #ffd2d2; }.final-cta h2 { max-width: 690px; margin: 16px auto 14px; color: white; }.final-cta p:not(.eyebrow) { max-width: 500px; margin: auto; color: rgba(255,255,255,.78); }.final-cta .btn { margin-top: 29px; color: var(--color-primary); background: white; box-shadow: none; }.final-cta .btn:hover { background: #f4f4f4; }
+  @media (max-width: 900px) { .hero-grid,.feature-layout { grid-template-columns: 1fr; }.hero-product { max-width: 620px; width: 86%; margin: 10px auto 0; }.workflow-grid { grid-template-columns: repeat(2, 1fr); }.feature-copy { max-width: 560px; } }
+  @media (max-width: 560px) { .hero-section { padding-bottom: 70px; }.hero-actions { align-items: flex-start; flex-direction: column; gap: 18px; }.hero-product { width: 100%; min-height: 280px; }.product-window { transform: none; }.window-body { min-height: 254px; grid-template-columns: 92px 1fr; }.window-body aside { padding: 14px 6px; font-size: .56rem; }.window-body aside div { gap: 5px; padding: 6px; }.aside-title { padding: 0 6px 10px; font-size: .49rem; }.mock-main { padding: 14px; }.mock-stats { margin: 12px 0; }.mock-files { flex-wrap: wrap; }.floating-file { display: none; }.workflow-section,.features-section { padding: 68px 0; }.workflow-grid { grid-template-columns: 1fr; margin-top: 30px; }.workflow-grid li { min-height: 0; }.final-cta { padding: 72px 0; } }
+</style>

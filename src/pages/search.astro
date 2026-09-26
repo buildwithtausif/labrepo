@@ -1,0 +1,431 @@
+---
+import Layout from "../Layouts/Layout.astro";
+import ZoomPan from "../components/ZoomPan.astro";
+import { NotebookIsland } from "../components/NotebookIsland.tsx";
+
+const { userId } = Astro.locals.auth();
+if (!userId) {
+  return Astro.redirect("/");
+}
+---
+
+<Layout title="Search">
+    <div class="container page-content">
+      <div class="page-header mb-8">
+        <h1 class="text-display-lg">
+          <i class="bi bi-search"></i> Search
+        </h1>
+      </div>
+
+      <!-- Search bar -->
+      <div class="search-bar mb-4">
+        <input
+          type="text"
+          class="input"
+          id="search-input"
+          placeholder="Search files, works, subjects..."
+          autocomplete="off"
+        />
+      </div>
+
+      <!-- Filters -->
+      <div class="filters flex gap-4 items-center mb-12 flex-wrap">
+        <select class="input" id="filter-sort" style="width: auto; min-width: 160px;">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="a-z">A → Z</option>
+          <option value="z-a">Z → A</option>
+          <option value="recently-updated">Recently updated</option>
+        </select>
+
+        <select class="input" id="filter-session" style="width: auto; min-width: 160px;">
+          <option value="">All sessions</option>
+        </select>
+
+        <select class="input" id="filter-subject" style="width: auto; min-width: 160px;">
+          <option value="">All subjects</option>
+        </select>
+
+        <select class="input" id="filter-ext" style="width: auto; min-width: 120px;">
+          <option value="">All types</option>
+        </select>
+      </div>
+
+      <!-- Results -->
+      <div id="search-results"></div>
+
+      <div id="search-empty" class="empty-state" style="display: none;">
+        <div class="text-hero text-muted mb-4"><i class="bi bi-search"></i></div>
+        <h3 class="text-display-lg mb-2">No results found</h3>
+        <p class="text-lead text-muted">
+          Try different search terms or adjust your filters.
+        </p>
+      </div>
+
+      <div id="search-initial" class="empty-state">
+        <div class="text-hero text-muted mb-4"><i class="bi bi-search"></i></div>
+        <h3 class="text-display-lg mb-2">Search your files</h3>
+        <p class="text-lead text-muted">
+          Search by filename, work title, or subject name.
+        </p>
+      </div>
+    </div>
+
+    <div id="search-preview-panel" class="search-preview-panel" style="display: none;" aria-label="File preview">
+      <div class="search-preview-panel__header" style="flex-direction: column; align-items: stretch; gap: 0; padding: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;">
+          <div class="flex items-center gap-3">
+            <button type="button" class="btn btn--ghost btn--icon" id="search-preview-fullscreen" aria-label="Toggle fullscreen">
+              <i class="bi bi-arrows-angle-expand"></i>
+            </button>
+            <button type="button" class="btn btn--ghost btn--icon" id="search-preview-close" aria-label="Close preview">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-caption text-muted" id="search-preview-size"></span>
+            <button class="btn btn--primary btn--sm" id="search-preview-download">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              Download
+            </button>
+          </div>
+        </div>
+        <div style="padding: 10px 16px; background: rgba(0,0,0,0.15); border-top: 1px solid var(--color-divider); display: flex; align-items: center; gap: 8px;">
+           <i class="bi bi-file-earmark-text text-muted" id="search-preview-file-icon"></i>
+           <h3 class="text-body-strong truncate" id="search-preview-filename" style="margin: 0; font-size: 0.95rem;">Loading...</h3>
+        </div>
+      </div>
+      <div id="search-preview-panel-content-container" class="search-preview-panel__content relative">
+        <div id="search-preview-default-content" class="w-full h-full"></div>
+        
+        <ZoomPan id="search-preview-zoom-container" class="hidden absolute inset-0">
+          <div id="search-preview-zoom-slot-content" class="w-full h-full flex items-center justify-center"></div>
+        </ZoomPan>
+
+        <div id="search-preview-notebook-container" class="hidden w-full h-full overflow-y-auto">
+          <NotebookIsland client:load />
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", async () => {
+        const api = (window as any).__labrepo_api;
+        const showToast = (window as any).__labrepo_showToast;
+        const downloadBlob = (window as any).__labrepo_downloadBlob;
+        const formatSize = (window as any).__labrepo_formatSize;
+        const formatRelativeTime = (window as any).__labrepo_formatRelativeTime;
+        const textExts = new Set(['ipynb','py','js','mjs','cjs','jsx','ts','tsx','c','cpp','h','hpp','java','kt','cs','go','rs','swift','php','rb','r','scala','sql','html','css','scss','json','yaml','yml','xml','md','txt','csv','env','sh','bat','ps1','toml','ini','cfg','conf','log','dockerfile','tex','rtf']);
+        const langMap: Record<string, string> = {
+          py: 'python', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
+          c: 'c', h: 'c', hpp: 'cpp', cpp: 'cpp', java: 'java', kt: 'kotlin', cs: 'csharp', go: 'go', rs: 'rust', swift: 'swift', php: 'php', rb: 'ruby', r: 'r', scala: 'scala', sql: 'sql',
+          html: 'html', css: 'css', scss: 'scss', json: 'json', yaml: 'yaml', yml: 'yaml', xml: 'xml', md: 'markdown', txt: 'plaintext', csv: 'plaintext', env: 'plaintext', sh: 'bash', bat: 'batch', ps1: 'powershell', toml: 'toml', ini: 'ini', cfg: 'ini', conf: 'ini', log: 'plaintext', dockerfile: 'dockerfile', tex: 'latex', rtf: 'plaintext'
+        };
+
+        await new Promise<void>((r) => {
+          const c = () => {
+            if ((window as any).Clerk?.session) r();
+            else setTimeout(c, 100);
+          };
+          c();
+        });
+
+        // Load filter options
+        try {
+          const filters = await api.getSearchFilters();
+
+          const sessionSelect = document.getElementById("filter-session") as HTMLSelectElement;
+          filters.sessions.forEach((s: any) => {
+            const opt = document.createElement("option");
+            opt.value = s.id;
+            opt.textContent = s.name;
+            sessionSelect.appendChild(opt);
+          });
+
+          const subjectSelect = document.getElementById("filter-subject") as HTMLSelectElement;
+          filters.subjects.forEach((s: any) => {
+            const opt = document.createElement("option");
+            opt.value = s.id;
+            opt.textContent = s.name;
+            subjectSelect.appendChild(opt);
+          });
+
+          const extSelect = document.getElementById("filter-ext") as HTMLSelectElement;
+          filters.extensions.forEach((ext: string) => {
+            const opt = document.createElement("option");
+            opt.value = ext;
+            opt.textContent = `.${ext}`;
+            extSelect.appendChild(opt);
+          });
+        } catch {}
+
+        const searchInput = document.getElementById("search-input") as HTMLInputElement;
+        let debounceTimer: number;
+
+        function doSearch() {
+          clearTimeout(debounceTimer);
+          debounceTimer = window.setTimeout(async () => {
+            const q = searchInput.value.trim();
+            const sort = (document.getElementById("filter-sort") as HTMLSelectElement).value;
+            const session_id = (document.getElementById("filter-session") as HTMLSelectElement).value;
+            const subject_id = (document.getElementById("filter-subject") as HTMLSelectElement).value;
+            const extension = (document.getElementById("filter-ext") as HTMLSelectElement).value;
+
+            if (!q && !session_id && !subject_id && !extension) {
+              document.getElementById("search-results")!.innerHTML = "";
+              document.getElementById("search-empty")!.style.display = "none";
+              document.getElementById("search-initial")!.style.display = "flex";
+              return;
+            }
+
+            document.getElementById("search-initial")!.style.display = "none";
+
+            try {
+              const results = await api.search({
+                q: q || undefined,
+                sort,
+                session_id: session_id ? parseInt(session_id) : undefined,
+                subject_id: subject_id ? parseInt(subject_id) : undefined,
+                extension: extension || undefined,
+              });
+
+              const totalResults = (results.files?.length || 0) + (results.works?.length || 0);
+
+              if (totalResults === 0) {
+                document.getElementById("search-results")!.innerHTML = "";
+                document.getElementById("search-empty")!.style.display = "flex";
+              } else {
+                document.getElementById("search-empty")!.style.display = "none";
+                renderResults(results);
+              }
+            } catch (e: any) {
+              showToast("Search failed", "error");
+            }
+          }, 300);
+        }
+
+        searchInput.addEventListener("input", doSearch);
+        document.getElementById("filter-sort")!.addEventListener("change", doSearch);
+        document.getElementById("filter-session")!.addEventListener("change", doSearch);
+        document.getElementById("filter-subject")!.addEventListener("change", doSearch);
+        document.getElementById("filter-ext")!.addEventListener("change", doSearch);
+
+        searchInput.focus();
+
+        function renderResults(results: any) {
+          const container = document.getElementById("search-results")!;
+          let html = "";
+
+          if (results.files && results.files.length > 0) {
+            html += `<h3 class="text-body-strong text-muted mb-4">Files (${results.files.length})</h3>`;
+            html += results.files
+              .map(
+                (file: any) => {
+                  const isText = textExts.has(file.extension);
+                  return `
+              <div class="search-result store-utility-card animate-fade-in mb-4">
+                <a href="/work/${file.work_id}" class="search-result__details">
+                  <div class="flex items-center gap-4 min-w-0">
+                    <span class="text-display-lg text-muted"><i class="bi bi-file-earmark-text"></i></span>
+                    <div class="min-w-0">
+                      <div class="text-body-strong text-ink">${file.filename}</div>
+                      <div class="text-caption text-muted truncate">
+                        ${file.session_name} › ${file.subject_name} › ${file.work_title}
+                      </div>
+                    </div>
+                  </div>
+                </a>
+                <div class="search-result__meta flex gap-4 items-center text-caption text-muted">
+                  <span class="btn--dark-utility p-1 rounded">.${file.extension}</span>
+                  <span class="hide-mobile">${formatSize(file.size_bytes)}</span>
+                  <span class="hide-mobile">${formatRelativeTime(file.created_at)}</span>
+                  ${isText ? `<button class="btn btn--secondary-pill btn--sm btn-search-preview" data-id="${file.id}" data-name="${file.filename}" data-ext="${file.extension}"><i class="bi bi-code-slash"></i> Preview</button>` : ''}
+                </div>
+              </div>
+            `;
+                },
+              )
+              .join("");
+          }
+
+          if (results.works && results.works.length > 0) {
+            html += `<h3 class="text-body-strong text-muted mt-8 mb-4">Works (${results.works.length})</h3>`;
+            html += results.works
+              .map(
+                (work: any) => `
+              <a href="/work/${work.id}" class="search-result store-utility-card animate-fade-in block text-decoration-none mb-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-4">
+                    <span class="text-display-lg text-muted"><i class="bi bi-flask"></i></span>
+                    <div>
+                      <div class="text-body-strong text-ink">${work.title}</div>
+                      <div class="text-caption text-muted">
+                        ${work.session_name} › ${work.subject_name} · ${work.file_count} files
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            `,
+              )
+              .join("");
+          }
+
+          container.innerHTML = html;
+          container.querySelectorAll(".btn-search-preview").forEach((button: any) => {
+            button.addEventListener("click", () => openPreview(parseInt(button.dataset.id), button.dataset.name, button.dataset.ext));
+          });
+        }
+
+        const previewPanel = document.getElementById("search-preview-panel")!;
+        let currentPreviewId: number | null = null;
+
+        async function openPreview(fileId: number, filename: string, extension: string) {
+          currentPreviewId = fileId;
+          previewPanel.style.display = "flex";
+          document.getElementById("search-preview-filename")!.textContent = filename;
+          
+          const defaultContent = document.getElementById("search-preview-default-content")!;
+          const zoomContainer = document.getElementById("search-preview-zoom-container") as any;
+          const zoomSlot = document.getElementById("search-preview-zoom-slot-content")!;
+          const notebookContainer = document.getElementById("search-preview-notebook-container")!;
+          
+          defaultContent.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+          defaultContent.classList.remove('hidden');
+          zoomContainer.classList.add('hidden');
+          zoomSlot.innerHTML = '';
+          notebookContainer.classList.add('hidden');
+          window.dispatchEvent(new Event('clear-notebook'));
+          
+          if (zoomContainer.resetState) zoomContainer.resetState();
+
+          try {
+            const result = await api.previewFile(fileId);
+            document.getElementById("search-preview-size")!.textContent = formatSize(result.file.size_bytes);
+            
+            if (extension === 'ipynb') {
+              defaultContent.classList.add('hidden');
+              zoomContainer.classList.add('hidden');
+              notebookContainer.classList.remove('hidden');
+              window.dispatchEvent(new CustomEvent('preview-notebook', { detail: { content: result.content } }));
+              return;
+            }
+
+            const escaped = result.content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            
+            notebookContainer.classList.add('hidden');
+            zoomContainer.classList.add('hidden');
+            zoomSlot.innerHTML = '';
+            defaultContent.classList.remove('hidden');
+            
+            defaultContent.innerHTML = `
+              <div style="width: 100%; height: 100%; overflow: auto; padding: 24px;">
+                <pre class="search-preview-code" style="margin: 0;"><code class="language-${langMap[extension] || 'plaintext'}">${escaped}</code></pre>
+              </div>
+            `;
+            
+            const code = defaultContent.querySelector("code");
+            if (code && (window as any).hljs) {
+              (window as any).hljs.highlightElement(code);
+            }
+          } catch (error: any) {
+            defaultContent.classList.remove('hidden');
+            zoomContainer.classList.add('hidden');
+            notebookContainer.classList.add('hidden');
+            defaultContent.innerHTML = '<div class="empty-state"><p style="color: var(--color-danger);">Failed to load preview</p></div>';
+          }
+        }
+
+        function closePreview() { previewPanel.style.display = "none"; currentPreviewId = null; }
+        document.getElementById("search-preview-close")!.addEventListener("click", closePreview);
+        
+        let searchIsFullscreen = false;
+        document.getElementById("search-preview-fullscreen")!.addEventListener("click", () => {
+          searchIsFullscreen = !searchIsFullscreen;
+          const panel = document.getElementById("search-preview-panel");
+          const btnIcon = document.querySelector("#search-preview-fullscreen i");
+          
+          if (searchIsFullscreen) {
+            panel?.classList.add("search-preview-panel--fullscreen");
+            btnIcon?.classList.remove("bi-arrows-angle-expand");
+            btnIcon?.classList.add("bi-arrows-angle-contract");
+          } else {
+            panel?.classList.remove("search-preview-panel--fullscreen");
+            btnIcon?.classList.remove("bi-arrows-angle-contract");
+            btnIcon?.classList.add("bi-arrows-angle-expand");
+          }
+        });
+        
+        document.getElementById("search-preview-download")!.addEventListener("click", async () => {
+          if (currentPreviewId === null) return;
+          try { downloadBlob(await api.downloadFile(currentPreviewId), document.getElementById("search-preview-filename")!.textContent || "file"); }
+          catch (error: any) { showToast(error.message, "error"); }
+        });
+      });
+    </script>
+
+    <style is:global>
+      .search-bar { position: relative; }
+      .search-result {
+        padding: 17px 24px;
+        transition: transform var(--transition-fast), border-color var(--transition-fast);
+      }
+      .search-result:hover {
+        transform: translateY(-2px);
+        border-color: var(--color-primary);
+      }
+      .search-result { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      .search-result__details { min-width: 0; flex: 1; color: inherit; }
+      .search-result__meta { flex-wrap: wrap; justify-content: flex-end; flex-shrink: 0; }
+      .search-preview-panel { position: fixed; top: var(--preview-top, 58px); right: 0; bottom: 0; z-index: var(--z-preview-panel); width: min(50%, 700px); display: flex; flex-direction: column; overflow: hidden; background: #101114; border-left: 1px solid var(--color-divider); box-shadow: -10px 0 35px rgba(0,0,0,.28); }
+      .search-preview-panel--fullscreen {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100vh !important;
+        top: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        border-radius: 0 !important;
+        z-index: var(--z-preview-fullscreen) !important;
+      }
+      .search-preview-panel__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: 0 0 auto; padding: 14px 18px; background: #1d1e23; border-bottom: 1px solid var(--color-divider); }
+      .search-preview-panel__content { flex: 1; min-height: 0; overflow: auto; background: #0d1117; }
+      .search-preview-code { margin: 0; padding: 24px; color: #c9d1d9; background: transparent !important; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 14px; line-height: 1.7; white-space: pre; tab-size: 4; }
+      .search-preview-code code { background: transparent !important; }
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 80px 0;
+      }
+      .block { display: block; }
+      .text-decoration-none { text-decoration: none; }
+      .text-ink { color: var(--color-ink); }
+      .min-w-0 { min-width: 0; }
+      .truncate {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .p-1 { padding: 4px 8px; }
+      .rounded { border-radius: 4px; }
+      .mb-2 { margin-bottom: 8px; }
+      .mb-4 { margin-bottom: 17px; }
+      .mb-8 { margin-bottom: 32px; }
+      .mb-12 { margin-bottom: 48px; }
+      .mt-8 { margin-top: 32px; }
+
+      @media (max-width: 768px) {
+        .filters { flex-direction: column; }
+        .filters select { width: 100% !important; }
+        .search-result { align-items: flex-start; flex-direction: column; }
+        .search-result__meta { width: 100%; justify-content: flex-start; }
+        .search-preview-panel { top: 114px; width: 100%; height: calc(100dvh - 114px); max-width: none; border-top: 1px solid var(--color-divider); border-left: none; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+        .search-preview-panel__header { padding: 13px 14px; }
+        .search-preview-code { padding: 16px; font-size: 13px; line-height: 1.62; }
+      }
+    </style>
+</Layout>

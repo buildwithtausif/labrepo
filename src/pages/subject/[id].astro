@@ -1,0 +1,416 @@
+---
+import Layout from '../../Layouts/Layout.astro'
+
+const { userId } = Astro.locals.auth();
+if (!userId) {
+  return Astro.redirect("/");
+}
+
+const { id } = Astro.params;
+---
+
+<Layout title="Subject">
+    <div class="container page-content" id="subject-page" data-subject-id={id}>
+      <div id="page-loading" class="empty-state">
+        <div class="spinner spinner--lg"></div>
+      </div>
+
+      <div id="page-content" style="display: none;">
+        <nav class="breadcrumb" id="breadcrumb">
+          <a href="/dashboard">Dashboard</a>
+          <span class="breadcrumb__separator">›</span>
+          <a href="#" id="session-link">Session</a>
+          <span class="breadcrumb__separator">›</span>
+          <span id="subject-name-crumb" class="text-ink">Subject</span>
+        </nav>
+
+        <div class="page-header flex items-center justify-between mb-8">
+          <div>
+            <h1 id="subject-title" class="text-display-lg">Subject</h1>
+            <p id="subject-stats" class="text-muted mt-2"></p>
+          </div>
+          <div class="flex gap-4 flex-wrap">
+            <button class="btn btn--secondary-pill" id="btn-download-subject"><i class="bi bi-download"></i> Download ZIP</button>
+            <button class="btn btn--primary" id="btn-new-work">+ New Work</button>
+          </div>
+        </div>
+
+        <div id="works-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
+
+        <div id="works-empty" class="empty-state" style="display: none;">
+          <div class="text-hero text-muted mb-4"><i class="bi bi-flask"></i></div>
+          <h3 class="text-display-lg mb-2">No works yet</h3>
+          <p class="text-lead text-muted mb-8">Create a new work entry and upload your lab files.</p>
+          <button class="btn btn--primary" id="btn-empty-new-work">Create Work</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Work + Upload Modal -->
+    <div id="work-modal" class="modal-overlay" style="display: none;">
+      <div class="modal" style="max-width: 560px;">
+        <h3 class="text-body-strong mb-2">New Work</h3>
+        <p class="text-caption text-muted mb-6">Create a work entry and optionally upload files.</p>
+        
+        <label class="text-caption text-muted block mb-2">Work Title</label>
+        <input type="text" class="input" id="work-title-input" autocomplete="off" />
+        <p class="text-caption text-muted mt-2 mb-6">
+          Leave empty to use today's date.
+        </p>
+
+        <div>
+          <label class="text-caption text-muted block mb-2">Files (optional)</label>
+          <div class="drop-zone" id="drop-zone">
+            <div class="text-display-lg text-muted mb-2"><i class="bi bi-folder2-open"></i></div>
+            <p class="text-body-strong mb-1">
+              Drag & drop files here, or click to browse
+            </p>
+            <p class="text-caption text-muted">
+              Max 25 MB total
+            </p>
+            <input type="file" id="file-input" multiple style="display: none;" />
+          </div>
+          <div id="selected-files" class="mt-4" style="max-height: 240px; overflow-y: auto; overflow-x: hidden; padding-right: 8px;"></div>
+        </div>
+
+        <!-- Upload progress -->
+        <div id="upload-progress" style="display: none;" class="mt-6">
+          <div class="progress-bar">
+            <div class="progress-bar__fill" id="progress-fill" style="width: 0%"></div>
+          </div>
+          <p id="upload-status" class="text-caption text-muted mt-2">Uploading...</p>
+        </div>
+
+        <div class="flex justify-between gap-4 mt-8">
+          <button class="btn btn--ghost" id="work-modal-cancel">Cancel</button>
+          <button class="btn btn--primary" id="work-modal-save">Create Work</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', async () => {
+        const api = (window as any).__labrepo_api;
+        const showToast = (window as any).__labrepo_showToast;
+        const downloadBlob = (window as any).__labrepo_downloadBlob;
+        const formatSize = (window as any).__labrepo_formatSize;
+        const formatRelativeTime = (window as any).__labrepo_formatRelativeTime;
+
+        await new Promise<void>((r) => { const c = () => { if ((window as any).Clerk?.session) r(); else setTimeout(c, 100); }; c(); });
+
+        const subjectId = parseInt(document.getElementById('subject-page')!.dataset.subjectId || '0');
+
+        let subject: any;
+        try {
+          const result = await api.getSubject(subjectId);
+          subject = result.subject;
+        } catch {
+          showToast('Subject not found', 'error');
+          window.location.href = '/dashboard';
+          return;
+        }
+
+        document.getElementById('subject-title')!.textContent = subject.name;
+        document.getElementById('subject-name-crumb')!.textContent = subject.name;
+        const sessionLink = document.getElementById('session-link') as HTMLAnchorElement;
+        sessionLink.href = `/session/${subject.session_id}`;
+        sessionLink.textContent = subject.session_name;
+        document.title = `${subject.name} | LabRepo`;
+
+        await loadWorks();
+
+        async function loadWorks() {
+          try {
+            const { works } = await api.getWorks(subjectId);
+            
+            document.getElementById('page-loading')!.style.display = 'none';
+            document.getElementById('page-content')!.style.display = 'block';
+
+            if (works.length === 0) {
+              document.getElementById('works-grid')!.style.display = 'none';
+              document.getElementById('works-empty')!.style.display = 'flex';
+            } else {
+              document.getElementById('works-grid')!.style.display = 'grid';
+              document.getElementById('works-empty')!.style.display = 'none';
+              renderWorks(works);
+            }
+
+            const totalFiles = works.reduce((a: number, w: any) => a + (w.file_count || 0), 0);
+            const totalSize = works.reduce((a: number, w: any) => a + (w.total_size || 0), 0);
+            document.getElementById('subject-stats')!.textContent = 
+              `${works.length} work${works.length !== 1 ? 's' : ''} · ${totalFiles} file${totalFiles !== 1 ? 's' : ''} · ${formatSize(totalSize)}`;
+          } catch (e: any) {
+            showToast('Failed to load works', 'error');
+          }
+        }
+
+        function renderWorks(works: any[]) {
+          const grid = document.getElementById('works-grid')!;
+          grid.innerHTML = works.map((work: any) => `
+            <div class="store-utility-card animate-fade-in" style="cursor: pointer;" onclick="window.location.href='/work/${work.id}'">
+              <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <span class="text-display-lg text-muted"><i class="bi bi-flask"></i></span>
+                <div class="card-actions flex gap-2 shrink-0" onclick="event.stopPropagation();">
+                  <button class="btn btn--ghost btn-delete-work btn--sm" data-id="${work.id}" data-title="${work.title}" title="Delete" style="color: #ff3b30;"><i class="bi bi-trash3"></i></button>
+                </div>
+              </div>
+              <h3 class="text-body-strong mb-2">${work.title}</h3>
+              <div class="flex gap-4 text-caption text-muted">
+                <span>${work.file_count || 0} file${work.file_count !== 1 ? 's' : ''}</span>
+                <span>${formatSize(work.total_size || 0)}</span>
+                <span class="hide-mobile">${formatRelativeTime(work.updatedAt || work.createdAt)}</span>
+              </div>
+            </div>
+          `).join('');
+
+          grid.querySelectorAll('.btn-delete-work').forEach((btn: any) => {
+            btn.addEventListener('click', async (e: Event) => {
+              e.stopPropagation();
+              if (confirm(`Delete "${btn.dataset.title}"?`)) {
+                try {
+                  await api.deleteWork(parseInt(btn.dataset.id));
+                  showToast('Work moved to recycle bin', 'success');
+                  await loadWorks();
+                } catch (err: any) { showToast(err.message, 'error'); }
+              }
+            });
+          });
+        }
+
+        const workModal = document.getElementById('work-modal')!;
+        const titleInput = document.getElementById('work-title-input') as HTMLInputElement;
+        const dropZone = document.getElementById('drop-zone')!;
+        const fileInput = document.getElementById('file-input') as HTMLInputElement;
+        const selectedFilesDiv = document.getElementById('selected-files')!;
+        let selectedFiles: File[] = [];
+
+        const allowedExtensions = new Set([
+          'py', 'ipynb', 'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'c', 'cpp', 'h', 'hpp', 'java', 'kt', 'cs',
+          'go', 'rs', 'swift', 'php', 'rb', 'r', 'scala', 'sql', 'html', 'css',
+          'scss', 'json', 'yaml', 'yml', 'xml', 'md', 'txt', 'csv', 'parquet',
+          'feather', 'pkl', 'joblib', 'onnx', 'pt', 'pth', 'keras', 'h5',
+          'env', 'sh', 'bat', 'ps1', 'toml', 'ini', 'cfg', 'conf', 'log', 'dockerfile',
+          'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'tex'
+        ]);
+
+        titleInput.placeholder = new Date().toISOString().split('T')[0];
+
+        function openWorkModal() {
+          workModal.style.display = 'flex';
+          titleInput.value = '';
+          selectedFiles = [];
+          fileInput.value = '';
+          selectedFilesDiv.innerHTML = '';
+          resetUploadProgress();
+          titleInput.focus();
+        }
+
+        function resetUploadProgress() {
+          const uploadProgress = document.getElementById('upload-progress')!;
+          const progressFill = document.getElementById('progress-fill')!;
+          const uploadStatus = document.getElementById('upload-status')!;
+          uploadProgress.style.display = 'none';
+          progressFill.style.width = '0%';
+          uploadStatus.textContent = 'Uploading...';
+        }
+
+        function getUnsupportedFiles(files: File[]) {
+          // Validation is strictly delegated to the backend, which resolves dynamic per-user permissions.
+          return [];
+        }
+
+        document.getElementById('btn-new-work')!.addEventListener('click', openWorkModal);
+        document.getElementById('btn-empty-new-work')?.addEventListener('click', openWorkModal);
+        document.getElementById('work-modal-cancel')!.addEventListener('click', () => { workModal.style.display = 'none'; });
+        workModal.addEventListener('click', (e) => { if (e.target === workModal) workModal.style.display = 'none'; });
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('active'); });
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('active');
+          if (e.dataTransfer?.files) handleFiles(Array.from(e.dataTransfer.files));
+        });
+
+        fileInput.addEventListener('change', () => {
+          if (fileInput.files) handleFiles(Array.from(fileInput.files));
+        });
+
+        function handleFiles(files: File[]) {
+          const unsupportedFiles = getUnsupportedFiles(files);
+          if (unsupportedFiles.length > 0) {
+            const names = unsupportedFiles.map((file) => file.name).join(', ');
+            showToast(`Unsupported file extension: ${names}`, 'error');
+            return;
+          }
+
+          selectedFiles = [...selectedFiles, ...files];
+          renderSelectedFiles();
+        }
+
+        function renderSelectedFiles() {
+          const totalSize = selectedFiles.reduce((a, f) => a + f.size, 0);
+          const tooLarge = totalSize > 25 * 1024 * 1024;
+
+          selectedFilesDiv.innerHTML = selectedFiles.map((f, i) => `
+            <div class="selected-file flex items-center justify-between py-2 border-b">
+              <span class="text-caption text-muted truncate mr-4"><i class="bi bi-file-earmark-text"></i> ${f.name}</span>
+              <span class="flex items-center gap-2">
+                <span class="text-caption text-muted">${formatSize(f.size)}</span>
+                <button class="btn btn--ghost remove-file" data-index="${i}" style="padding: 2px 8px;">×</button>
+              </span>
+            </div>
+          `).join('');
+
+          if (selectedFiles.length > 0) {
+            selectedFilesDiv.innerHTML += `
+              <div class="text-caption mt-2 ${tooLarge ? 'text-danger' : 'text-muted'}">
+                Total: ${formatSize(totalSize)} / 25 MB ${tooLarge ? '— exceeds limit!' : ''}
+              </div>
+            `;
+          }
+
+          selectedFilesDiv.querySelectorAll('.remove-file').forEach((btn: any) => {
+            btn.addEventListener('click', () => {
+              selectedFiles.splice(parseInt(btn.dataset.index), 1);
+              renderSelectedFiles();
+            });
+          });
+        }
+
+        document.getElementById('work-modal-save')!.addEventListener('click', async () => {
+          const title = titleInput.value.trim() || undefined;
+          const saveBtn = document.getElementById('work-modal-save') as HTMLButtonElement;
+          let createdWorkId: number | null = null;
+
+          try {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Creating...';
+
+            const unsupportedFiles = getUnsupportedFiles(selectedFiles);
+            if (unsupportedFiles.length > 0) {
+              const names = unsupportedFiles.map((file) => file.name).join(', ');
+              showToast(`Unsupported file extension: ${names}`, 'error');
+              resetUploadProgress();
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Create Work';
+              return;
+            }
+
+            if (selectedFiles.length > 0) {
+              const totalSize = selectedFiles.reduce((a, f) => a + f.size, 0);
+              if (totalSize > 25 * 1024 * 1024) {
+                showToast('Total file size exceeds 25 MB', 'error');
+                resetUploadProgress();
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Create Work';
+                return;
+              }
+            }
+
+            const { work } = await api.createWork(subjectId, title);
+            createdWorkId = work.id;
+
+            if (selectedFiles.length > 0) {
+              document.getElementById('upload-progress')!.style.display = 'block';
+              document.getElementById('upload-status')!.textContent = `Uploading ${selectedFiles.length} file(s)...`;
+              document.getElementById('progress-fill')!.style.width = '50%';
+
+              await api.uploadFiles(work.id, selectedFiles);
+
+              document.getElementById('progress-fill')!.style.width = '100%';
+              document.getElementById('upload-status')!.textContent = 'Upload complete!';
+            }
+
+            showToast('Work created!', 'success');
+            workModal.style.display = 'none';
+            await loadWorks();
+          } catch (err: any) {
+            if (createdWorkId) {
+              try { await api.deleteWork(createdWorkId); } catch (e) {}
+            }
+            resetUploadProgress();
+            showToast(err.message, 'error');
+          } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Create Work';
+          }
+        });
+
+        titleInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && selectedFiles.length === 0) document.getElementById('work-modal-save')!.click();
+          if (e.key === 'Escape') workModal.style.display = 'none';
+        });
+
+        document.getElementById('btn-download-subject')!.addEventListener('click', async () => {
+          try {
+            showToast('Preparing download...', 'info');
+            const blob = await api.downloadSubject(subjectId);
+            downloadBlob(blob, `${subject.name}.zip`);
+            showToast('Download started!', 'success');
+          } catch (err: any) { showToast(err.message, 'error'); }
+        });
+      });
+    </script>
+
+    <style>
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 80px 0;
+      }
+      .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--color-divider);
+        border-top-color: var(--color-primary);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        margin-bottom: var(--space-4);
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .card-actions { opacity: 0; transition: opacity var(--transition-fast); }
+      .store-utility-card:hover .card-actions { opacity: 1; }
+      
+      .progress-bar {
+        width: 100%;
+        height: 4px;
+        background: var(--color-divider);
+        border-radius: var(--radius-pill);
+        overflow: hidden;
+      }
+      .progress-bar__fill {
+        height: 100%;
+        background: var(--color-primary);
+        border-radius: var(--radius-pill);
+        transition: width 0.3s ease;
+      }
+
+      .text-danger { color: #ff3b30; }
+      .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .py-2 { padding-top: 8px; padding-bottom: 8px; }
+      .mr-4 { margin-right: 17px; }
+      .border-b { border-bottom: 1px solid var(--color-divider); }
+      .mb-1 { margin-bottom: 4px; }
+      .mb-2 { margin-bottom: 8px; }
+      .mb-4 { margin-bottom: 17px; }
+      .mb-6 { margin-bottom: 24px; }
+      .mb-8 { margin-bottom: 32px; }
+      .mt-2 { margin-top: 8px; }
+      .mt-4 { margin-top: 17px; }
+      .mt-6 { margin-top: 24px; }
+      .mt-8 { margin-top: 32px; }
+      .block { display: block; }
+
+      @media (max-width: 768px) {
+        .page-header { flex-direction: column; align-items: flex-start !important; gap: var(--space-4); }
+        .card-actions { opacity: 1; }
+      }
+    </style>
+</Layout>

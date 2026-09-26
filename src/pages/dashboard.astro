@@ -1,0 +1,641 @@
+---
+import Layout from "../Layouts/Layout.astro";
+
+const { userId } = Astro.locals.auth();
+if (!userId) {
+  return Astro.redirect("/");
+}
+
+const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.CLERK_ADMIN_USER_ID;
+---
+
+<Layout title="Dashboard">
+    <div class="container page-content" id="dashboard-page">
+      <!-- Loading state -->
+      <div id="dashboard-loading" class="empty-state">
+        <div class="spinner spinner--lg"></div>
+        <p class="text-muted">Loading your workspace...</p>
+      </div>
+
+      <!-- Dashboard content (hidden until loaded) -->
+      <div id="dashboard-content" style="display: none;">
+        <div class="dashboard-frame">
+          <aside class="dashboard-sidebar" aria-label="Workspace navigation">
+            <p class="dashboard-sidebar__label">Workspace</p>
+            <a class="dashboard-sidebar__link active" href="/dashboard"><i class="bi bi-grid-1x2"></i> Overview</a>
+            <a class="dashboard-sidebar__link" href="/dashboard"><i class="bi bi-folder2"></i> Sessions</a>
+            <a class="dashboard-sidebar__link" href="/search"><i class="bi bi-search"></i> Search</a>
+            <a class="dashboard-sidebar__link" href="/recycle-bin"><i class="bi bi-trash3"></i> Recycle Bin</a>
+          </aside>
+          <div class="dashboard-main">
+            <!-- Suspension Banner -->
+            <div id="suspension-banner" class="store-utility-card" style="display: none; background: rgba(255, 102, 102, 0.1); border-color: rgba(255, 102, 102, 0.3); margin-bottom: var(--space-6);">
+              <div class="flex items-start gap-4">
+                <div class="text-hero" style="color: var(--color-danger); font-size: 1.5rem;"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                <div>
+                  <h3 class="text-body-strong" style="color: var(--color-danger); margin-bottom: 4px;">Account suspended</h3>
+                  <p class="text-caption text-muted" style="margin-bottom: 8px;">Your ability to upload files has been suspended by an administrator.</p>
+                  <p class="text-caption" style="margin-bottom: 12px; font-weight: 500;">Reason: <span id="suspension-reason-text">No reason provided.</span></p>
+                  <p class="text-caption text-muted">If you believe this is an error, please contact support at <a href="mailto:support@labrepo.edu" class="text-link">support@labrepo.edu</a> with your user ID: <code id="suspension-user-id" style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;"></code>.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Page header -->
+            <div class="page-header flex items-center justify-between">
+              <div>
+                <p class="dashboard-kicker hide-mobile">Your workspace</p>
+                <h1 class="text-display-lg hide-mobile">Your coursework, sorted.</h1>
+                <h1 class="text-display-lg hide-desktop">Dashboard</h1>
+                <p class="text-muted" id="stats-line">Your lab work repository</p>
+              </div>
+              <div class="flex gap-4 flex-wrap dashboard-actions items-center">
+              {isAdmin && (
+                <a href="/admin" class="btn btn--dark-utility border border-[#ffd700] text-[#ffd700] hover:bg-[#ffd700] hover:text-black transition-colors" title="Open Admin Panel">
+                  <i class="bi bi-shield-shaded mr-2"></i> Open Admin
+                </a>
+              )}
+            <button
+              class="btn btn--secondary-pill"
+              id="btn-download-all"
+              title="Download everything"
+            >
+              <i class="bi bi-download"></i> Backup All
+            </button>
+            <button class="btn btn--primary" id="btn-new-session">
+              <i class="bi bi-plus-lg"></i> New Session
+            </button>
+          </div>
+        </div>
+
+            <div class="dashboard-stats" aria-label="Repository statistics">
+              <article><strong id="stat-sessions">0</strong><span>Sessions</span></article>
+              <article><strong id="stat-subjects">0</strong><span>Subjects</span></article>
+              <article><strong id="stat-files">0</strong><span>Files</span></article>
+            </div>
+
+            <!-- Storage Widget -->
+            <div class="store-utility-card" id="storage-widget" style="display: none; margin-top: var(--space-6); padding: var(--space-6);">
+              <div class="flex justify-between items-end mb-2">
+                <div>
+                  <h3 class="text-body-strong mb-1">Storage Usage</h3>
+                  <p class="text-caption text-muted" id="storage-text">Loading...</p>
+                </div>
+                <div class="text-caption text-muted" id="storage-percentage">0%</div>
+              </div>
+              <div class="storage-bar" id="storage-bar">
+                <!-- Segments will be injected here -->
+              </div>
+              <div class="storage-legend flex gap-4 flex-wrap mt-4 text-caption text-muted" id="storage-legend">
+                <!-- Legend will be injected here -->
+              </div>
+            </div>
+
+        <!-- Sessions grid -->
+        <div
+          id="sessions-grid"
+          class="grid grid-cols-1 md:grid-cols-3 gap-6"
+          style="margin-top: var(--space-12);"
+        >
+        </div>
+
+        <!-- Empty state -->
+        <div id="sessions-empty" class="empty-state" style="display: none;">
+          <div class="empty-state__icon text-hero text-muted mb-4"><i class="bi bi-calendar3"></i></div>
+          <h3 class="text-display-lg mb-2">No academic sessions yet</h3>
+          <p class="text-lead text-muted mb-8">
+            Create your first academic session to start organizing your lab work.
+          </p>
+          <button class="btn btn--primary" id="btn-empty-new-session">
+            Create Academic Session
+          </button>
+        </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Session Modal -->
+    <div id="session-modal" class="modal-overlay" style="display: none;">
+      <div class="modal">
+        <h3 class="text-body-strong mb-2" id="modal-title">New Academic Session</h3>
+        <p class="text-caption text-muted mb-6">
+          Enter a name for your academic session (e.g., 2026–2027).
+        </p>
+        <input
+          type="text"
+          class="input"
+          id="session-name-input"
+          placeholder="2026–2027"
+          autocomplete="off"
+        />
+
+        <div style="margin-top: var(--space-4);">
+          <label
+            class="flex items-center gap-2 text-caption"
+            style="cursor: pointer;"
+          >
+            <input
+              type="checkbox"
+              id="auto-delete-check"
+            />
+            Auto-delete after session ends
+          </label>
+          <div
+            id="auto-delete-date-wrapper"
+            style="display: none; margin-top: var(--space-3);"
+          >
+            <input type="date" class="input" id="auto-delete-date" />
+            <p class="text-caption text-muted mt-2">
+              Content will be moved to recycle bin on this date.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex justify-between gap-4 mt-8">
+          <button class="btn btn--ghost" id="modal-cancel">Cancel</button>
+          <button class="btn btn--primary" id="modal-save">Create Session</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rename Modal -->
+    <div id="rename-modal" class="modal-overlay" style="display: none;">
+      <div class="modal">
+        <h3 class="text-body-strong mb-4">Rename Session</h3>
+        <input
+          type="text"
+          class="input"
+          id="rename-input"
+          placeholder="New name"
+          autocomplete="off"
+        />
+        <div class="flex justify-between gap-4 mt-8">
+          <button class="btn btn--ghost" id="rename-cancel">Cancel</button>
+          <button class="btn btn--primary" id="rename-save">Rename</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", async () => {
+        const api = (window as any).__labrepo_api;
+        const showToast = (window as any).__labrepo_showToast;
+        const downloadBlob = (window as any).__labrepo_downloadBlob;
+
+        // Wait for Clerk to be ready
+        await new Promise<void>((resolve) => {
+          const check = () => {
+            const c = (window as any).Clerk;
+            if (c && (typeof c.isReady === 'function' ? c.isReady() : c.loaded)) resolve();
+            else setTimeout(check, 100);
+          };
+          check();
+        });
+
+        // Check onboarding status
+        try {
+          const status = await api.getUserStatus();
+          if (!status.onboarding_completed) {
+            window.location.href = "/onboarding";
+            return;
+          }
+        } catch (e) {
+          console.error("Failed to check onboarding status:", e);
+        }
+
+        // Check suspension status
+        try {
+          const status = await api.getUserStatus();
+          if (status.uploads_suspended) {
+            document.getElementById("suspension-banner")!.style.display = "block";
+            document.getElementById("suspension-reason-text")!.textContent = status.suspension_reason || "Violation of terms of service.";
+            document.getElementById("suspension-user-id")!.textContent = (window as any).Clerk?.user?.id || "unknown";
+          }
+        } catch (e) {
+          console.error("Failed to fetch suspension status:", e);
+        }
+
+        // Load sessions
+        await loadSessions();
+        await loadStorageStats();
+
+        async function loadStorageStats() {
+          try {
+            const stats = await api.getStorageStats();
+            const widget = document.getElementById("storage-widget")!;
+            const textEl = document.getElementById("storage-text")!;
+            const percentEl = document.getElementById("storage-percentage")!;
+            const barEl = document.getElementById("storage-bar")!;
+            const legendEl = document.getElementById("storage-legend")!;
+            
+            if (stats.allocated === 0) return;
+
+            const formatSize = (window as any).__labrepo_formatSize;
+            widget.style.display = "block";
+            
+            const usedStr = formatSize(stats.used);
+            const allocatedStr = formatSize(stats.allocated);
+            const percent = Math.min(100, Math.round((stats.used / stats.allocated) * 100));
+            
+            textEl.textContent = `${usedStr} used of ${allocatedStr}`;
+            percentEl.textContent = `${percent}%`;
+
+            const extColors: Record<string, string> = {
+              js: '#f1e05a', mjs: '#f1e05a', cjs: '#f1e05a', jsx: '#f1e05a',
+              ts: '#3178c6', tsx: '#3178c6',
+              py: '#3572A5', ipynb: '#3572A5',
+              c: '#555555', h: '#555555', cpp: '#f34b7d', hpp: '#f34b7d',
+              java: '#b07219', kt: '#A97BFF',
+              cs: '#178600', go: '#00ADD8', rs: '#dea584',
+              swift: '#F05138', php: '#4F5D95', rb: '#701516',
+              r: '#198CE7', scala: '#c22d40', sql: '#e38c00',
+              html: '#e34c26', css: '#563d7c', scss: '#c6538c',
+              json: '#292929', yaml: '#cb171e', yml: '#cb171e', xml: '#0060ac',
+              md: '#083fa1', txt: '#cccccc', csv: '#237346',
+              env: '#a2a2a2', sh: '#89e051', bat: '#c1f12e', ps1: '#012456',
+              toml: '#9c4221', ini: '#d1d5db', cfg: '#d1d5db', conf: '#d1d5db', log: '#ffffff', dockerfile: '#384d54',
+              pdf: '#e32400',
+              doc: '#2b579a', docx: '#2b579a',
+              xls: '#217346', xlsx: '#217346',
+              ppt: '#d24726', pptx: '#d24726',
+              rtf: '#7a7a7a', tex: '#3D6117',
+            };
+            const defaultColor = '#858585';
+
+            let barHtml = '';
+            let legendHtml = '';
+            let totalVisualWidth = 0;
+
+            // Sort breakdown by size descending
+            const breakdown = stats.breakdown.sort((a: any, b: any) => b.size - a.size);
+            
+            breakdown.forEach((item: any) => {
+              if (item.size === 0) return;
+              const color = extColors[item.ext] || defaultColor;
+              let widthPercent = (item.size / stats.allocated) * 100;
+              
+              // Ensure even tiny files get a minimum visual width if they exist, but don't overflow
+              if (widthPercent > 0 && widthPercent < 0.5) widthPercent = 0.5;
+              
+              totalVisualWidth += widthPercent;
+              if (totalVisualWidth > 100) widthPercent -= (totalVisualWidth - 100);
+
+              if (widthPercent > 0) {
+                barHtml += `<div class="storage-bar-segment" style="width: ${widthPercent}%; background-color: ${color};" title="${item.ext}: ${formatSize(item.size)}"></div>`;
+                legendHtml += `
+                  <div class="storage-legend-item">
+                    <span class="storage-legend-color" style="background-color: ${color};"></span>
+                    <span>${item.ext} (${formatSize(item.size)})</span>
+                  </div>
+                `;
+              }
+            });
+
+            // Add empty space segment if not 100% full
+            if (totalVisualWidth < 100) {
+               barHtml += `<div class="storage-bar-segment" style="flex-grow: 1; background-color: transparent;"></div>`;
+            }
+
+            if (breakdown.length === 0) {
+              barHtml = `<div class="storage-bar-segment" style="width: 100%; background-color: rgba(255,255,255,0.05);"></div>`;
+              legendHtml = `<div class="storage-legend-item text-muted">No files yet</div>`;
+            }
+
+            barEl.innerHTML = barHtml;
+            legendEl.innerHTML = legendHtml;
+
+          } catch (e) {
+            console.error("Failed to load storage stats:", e);
+          }
+        }
+
+        async function loadSessions() {
+          try {
+            const { sessions } = await api.getSessions();
+
+            document.getElementById("dashboard-loading")!.style.display = "none";
+            document.getElementById("dashboard-content")!.style.display = "block";
+
+            if (sessions.length === 0) {
+              document.getElementById("sessions-grid")!.style.display = "none";
+              document.getElementById("sessions-empty")!.style.display = "flex";
+            } else {
+              document.getElementById("sessions-grid")!.style.display = "grid";
+              document.getElementById("sessions-empty")!.style.display = "none";
+              renderSessions(sessions);
+            }
+
+            // Update stats
+            const totalFiles = sessions.reduce(
+              (acc: number, s: any) => acc + (s.file_count || 0),
+              0,
+            );
+            const totalSubjects = sessions.reduce(
+              (acc: number, s: any) => acc + (s.subject_count || 0),
+              0,
+            );
+            document.getElementById("stats-line")!.textContent =
+              `${sessions.length} session${sessions.length !== 1 ? "s" : ""} · ${totalSubjects} subject${totalSubjects !== 1 ? "s" : ""} · ${totalFiles} file${totalFiles !== 1 ? "s" : ""}`;
+            document.getElementById("stat-sessions")!.textContent = String(sessions.length).padStart(2, "0");
+            document.getElementById("stat-subjects")!.textContent = String(totalSubjects).padStart(2, "0");
+            document.getElementById("stat-files")!.textContent = String(totalFiles).padStart(2, "0");
+          } catch (e) {
+            console.error("Failed to load sessions:", e);
+            showToast("Failed to load sessions", "error");
+            document.getElementById("dashboard-loading")!.style.display = "none";
+          }
+        }
+
+        function renderSessions(sessions: any[]) {
+          const grid = document.getElementById("sessions-grid")!;
+          grid.innerHTML = sessions
+            .map(
+              (session: any, i: number) => `
+            <div class="store-utility-card dashboard-session-card animate-fade-in" style="cursor: pointer;" data-session-id="${session.id}" onclick="window.location.href='/session/${session.id}'">
+              <div class="dashboard-session-card__top">
+                <div class="dashboard-session-card__identity">
+                  <span class="dashboard-session-card__icon"><i class="bi bi-calendar3"></i></span>
+                  <div>
+                    <h3 class="text-body-strong">${session.name}</h3>
+                    <div class="flex gap-4 text-caption text-muted">
+                      <span>${session.subject_count || 0} subject${session.subject_count !== 1 ? "s" : ""}</span>
+                      <span>${session.file_count || 0} file${session.file_count !== 1 ? "s" : ""}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="session-actions flex gap-2 shrink-0" onclick="event.stopPropagation();">
+                  <button class="btn btn--ghost btn-rename-session btn--sm" data-id="${session.id}" data-name="${session.name}" title="Rename"><i class="bi bi-pencil"></i></button>
+                  <button class="btn btn--ghost btn-delete-session btn--sm" data-id="${session.id}" data-name="${session.name}" title="Delete" style="color: #ff3b30;"><i class="bi bi-trash3"></i></button>
+                </div>
+              </div>
+              ${
+                session.autoDelete
+                  ? `
+                <div class="dashboard-session-card__footer text-caption text-muted">
+                  <span><i class="bi bi-clock-history"></i> Auto-delete: ${session.autoDeleteDate || "enabled"}</span>
+                  <i class="bi bi-arrow-up-right"></i>
+                </div>
+              `
+                  : `<div class="dashboard-session-card__footer text-caption text-muted"><span>Open session to view your work</span><i class="bi bi-arrow-up-right"></i></div>`
+              }
+            </div>
+          `,
+            )
+            .join("");
+
+          // Wire up rename buttons
+          grid.querySelectorAll(".btn-rename-session").forEach((btn: any) => {
+            btn.addEventListener("click", (e: Event) => {
+              e.stopPropagation();
+              openRenameModal(parseInt(btn.dataset.id), btn.dataset.name);
+            });
+          });
+
+          // Wire up delete buttons
+          grid.querySelectorAll(".btn-delete-session").forEach((btn: any) => {
+            btn.addEventListener("click", async (e: Event) => {
+              e.stopPropagation();
+              if (
+                confirm(
+                  `Delete "${btn.dataset.name}"? It will be moved to the recycle bin.`,
+                )
+              ) {
+                try {
+                  await api.deleteSession(parseInt(btn.dataset.id));
+                  showToast("Session moved to recycle bin", "success");
+                  await loadSessions();
+                } catch (err: any) {
+                  showToast(err.message, "error");
+                }
+              }
+            });
+          });
+        }
+
+        // New session modal
+        const sessionModal = document.getElementById("session-modal")!;
+        const sessionInput = document.getElementById("session-name-input") as HTMLInputElement;
+        const autoDeleteCheck = document.getElementById("auto-delete-check") as HTMLInputElement;
+        const autoDeleteWrapper = document.getElementById("auto-delete-date-wrapper")!;
+        const autoDeleteDate = document.getElementById("auto-delete-date") as HTMLInputElement;
+
+        function openSessionModal() {
+          sessionInput.value = "";
+          autoDeleteCheck.checked = false;
+          autoDeleteWrapper.style.display = "none";
+          sessionModal.style.display = "flex";
+          sessionInput.focus();
+
+          const now = new Date();
+          const endYear = now.getMonth() >= 6 ? now.getFullYear() + 1 : now.getFullYear();
+          autoDeleteDate.value = `${endYear}-07-31`;
+        }
+
+        document.getElementById("btn-new-session")!.addEventListener("click", openSessionModal);
+        document.getElementById("btn-empty-new-session")?.addEventListener("click", openSessionModal);
+        document.getElementById("modal-cancel")!.addEventListener("click", () => {
+          sessionModal.style.display = "none";
+        });
+
+        autoDeleteCheck.addEventListener("change", () => {
+          autoDeleteWrapper.style.display = autoDeleteCheck.checked ? "block" : "none";
+        });
+
+        sessionModal.addEventListener("click", (e) => {
+          if (e.target === sessionModal) sessionModal.style.display = "none";
+        });
+
+        document.getElementById("modal-save")!.addEventListener("click", async () => {
+          const name = sessionInput.value.trim();
+          if (!name) {
+            showToast("Please enter a session name", "warning");
+            return;
+          }
+          try {
+            await api.createSession(
+              name,
+              autoDeleteCheck.checked,
+              autoDeleteCheck.checked ? autoDeleteDate.value : undefined,
+            );
+            showToast("Session created!", "success");
+            sessionModal.style.display = "none";
+            await loadSessions();
+          } catch (err: any) {
+            showToast(err.message, "error");
+          }
+        });
+
+        sessionInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") document.getElementById("modal-save")!.click();
+          if (e.key === "Escape") sessionModal.style.display = "none";
+        });
+
+        // Rename modal
+        let renameSessionId: number | null = null;
+        const renameModal = document.getElementById("rename-modal")!;
+        const renameInput = document.getElementById("rename-input") as HTMLInputElement;
+
+        function openRenameModal(id: number, name: string) {
+          renameSessionId = id;
+          renameInput.value = name;
+          renameModal.style.display = "flex";
+          renameInput.focus();
+          renameInput.select();
+        }
+
+        document.getElementById("rename-cancel")!.addEventListener("click", () => {
+          renameModal.style.display = "none";
+        });
+        renameModal.addEventListener("click", (e) => {
+          if (e.target === renameModal) renameModal.style.display = "none";
+        });
+
+        document.getElementById("rename-save")!.addEventListener("click", async () => {
+          if (renameSessionId === null) return;
+          const name = renameInput.value.trim();
+          if (!name) {
+            showToast("Name cannot be empty", "warning");
+            return;
+          }
+          try {
+            await api.updateSession(renameSessionId, { name });
+            showToast("Session renamed", "success");
+            renameModal.style.display = "none";
+            await loadSessions();
+          } catch (err: any) {
+            showToast(err.message, "error");
+          }
+        });
+
+        renameInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") document.getElementById("rename-save")!.click();
+          if (e.key === "Escape") renameModal.style.display = "none";
+        });
+
+        document.getElementById("btn-download-all")!.addEventListener("click", async () => {
+          try {
+            showToast("Preparing backup...", "info");
+            const blob = await api.downloadAll();
+            downloadBlob(blob, "labrepo-backup.zip");
+            showToast("Backup downloaded!", "success");
+          } catch (err: any) {
+            showToast(err.message, "error");
+          }
+        });
+      });
+    </script>
+
+    <style is:global>
+      .page-header {
+        margin-bottom: var(--space-8);
+      }
+
+      .dashboard-frame { min-height: 580px; }
+      .dashboard-sidebar { display: none; }
+      .dashboard-kicker { margin-bottom: 6px; color: #b37a7a; font-size: .7rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+      .dashboard-stats { display: none; }
+      .dashboard-session-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+      .dashboard-session-card__identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+      .dashboard-session-card__icon { display: grid; place-items: center; flex: 0 0 38px; width: 38px; height: 38px; border-radius: 11px; color: #ff9595; background: var(--color-primary-soft); font-size: 1rem; }
+      .dashboard-session-card__footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 18px; padding-top: 13px; border-top: 1px solid var(--color-divider); }
+      
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: var(--space-section) 0;
+      }
+      
+      .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--color-divider);
+        border-top-color: var(--color-primary);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        margin-bottom: var(--space-4);
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      .session-actions {
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+      }
+
+      .store-utility-card:hover .session-actions {
+        opacity: 1;
+      }
+
+      .mb-2 { margin-bottom: 8px; }
+      .mb-4 { margin-bottom: 17px; }
+      .mb-6 { margin-bottom: 24px; }
+      .mb-8 { margin-bottom: 32px; }
+      .mt-2 { margin-top: 8px; }
+      .mt-4 { margin-top: 17px; }
+      .mt-8 { margin-top: 32px; }
+
+      @media (max-width: 768px) {
+        .page-header {
+          flex-direction: column;
+          align-items: flex-start !important;
+          gap: var(--space-4);
+        }
+        .session-actions {
+          opacity: 1;
+        }
+      }
+
+      @media (min-width: 900px) {
+        #dashboard-page { width: min(100% - 48px, 1420px); padding-block: 34px 58px; }
+        .dashboard-frame { display: grid; grid-template-columns: 198px minmax(0, 1fr); overflow: hidden; min-height: 610px; border: 1px solid rgba(255,255,255,.13); border-radius: 24px; background: #1a1b20; box-shadow: 0 25px 80px rgba(0,0,0,.35); }
+        .dashboard-sidebar { display: flex; flex-direction: column; gap: 6px; padding: 28px 12px; background: rgba(0,0,0,.17); border-right: 1px solid var(--color-divider); user-select: none; }
+        .dashboard-sidebar__label { margin: 0 9px 12px; color: #74737a; font-size: .66rem; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+        .dashboard-sidebar__link { display: flex; align-items: center; gap: 11px; padding: 11px 10px; border-radius: 9px; color: #a5a4aa; font-size: .86rem; transition: color var(--transition-fast), background var(--transition-fast); }
+        .dashboard-sidebar__link:hover { color: white; background: rgba(255,255,255,.06); }
+        .dashboard-sidebar__link.active { color: #fff; background: rgba(197,27,27,.30); }
+        .dashboard-sidebar__link i { width: 15px; font-size: .95rem; }
+        .dashboard-main { padding: 30px; }
+        .dashboard-main .page-header { margin-bottom: 26px; }
+        .dashboard-main .page-header h1 { font-size: 1.5rem; }
+        .dashboard-actions .btn { min-height: 38px; padding: 8px 13px; font-size: .8rem; }
+        .dashboard-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .dashboard-stats article { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; border: 1px solid var(--color-divider); border-radius: 10px; background: rgba(0,0,0,.09); }
+        .dashboard-stats strong { color: #f7f6f4; font: 600 1.25rem var(--font-display); letter-spacing: -.05em; }
+        .dashboard-stats span { color: var(--color-ink-muted); font-size: .72rem; }
+        .dashboard-main #sessions-grid { grid-template-columns: 1fr; gap: 12px; margin-top: 22px !important; }
+        .dashboard-main .dashboard-session-card { padding: 18px; box-shadow: none; user-select: none; }
+        .dashboard-main .dashboard-session-card:hover { transform: translateY(-2px); }
+        .dashboard-main #sessions-empty { min-height: 360px; }
+      }
+      .storage-bar {
+        display: flex;
+        height: 12px;
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        overflow: hidden;
+        width: 100%;
+        margin-top: 8px;
+      }
+      .storage-bar-segment {
+        height: 100%;
+      }
+      .storage-bar-segment:not(:last-child) {
+        border-right: 1px solid #1a1b20;
+      }
+      .storage-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .storage-legend-color {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+    </style>
+</Layout>

@@ -1,0 +1,110 @@
+---
+import Layout from '../Layouts/Layout.astro'
+
+const getEnv = (key: string) => typeof process !== 'undefined' ? process.env[key] : undefined;
+const apiUrl = getEnv('INTERNAL_API_URL') || import.meta.env.PUBLIC_API_URL || 'http://localhost:3001'
+
+let apiStatus = 'unknown'
+let storageStatus = 'unknown'
+let dbStatus = 'unknown'
+let lastCheck = new Date().toISOString()
+
+try {
+  const res = await fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(3000) })
+  if (res.ok) {
+    const data = await res.json()
+    apiStatus = 'operational'
+    dbStatus = data.db || 'operational'
+    storageStatus = data.storage || 'operational'
+  } else {
+    apiStatus = 'degraded'
+  }
+} catch (e) {
+  console.error("Status page fetch error:", e)
+  apiStatus = 'down'
+  dbStatus = 'unknown'
+  storageStatus = 'unknown'
+}
+---
+
+<Layout title="System Status" seo={{ title: 'System Status', description: 'Check the real-time operational status of LabRepo services.' }}>
+  <div class="container page-content">
+    <div class="page-header" style="margin-bottom: var(--space-6);">
+      <p class="dashboard-kicker">Status Board</p>
+      <h1 class="text-display-lg">System Status</h1>
+      <p class="text-muted" style="margin-top: 8px;">Current operational status of LabRepo services.</p>
+    </div>
+
+    <div class="card" style="padding: 24px; margin-bottom: 24px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-divider); padding-bottom: 24px; margin-bottom: 24px;">
+        <h2 class="text-body-strong">All Systems</h2>
+        {apiStatus === 'operational' ? (
+          <span class="admin-badge admin-badge--success" style="font-size: 0.85rem;"><i class="bi bi-check-circle-fill"></i> All Systems Operational</span>
+        ) : apiStatus === 'degraded' ? (
+          <span class="admin-badge admin-badge--warning" style="font-size: 0.85rem;"><i class="bi bi-exclamation-triangle-fill"></i> Partial Outage</span>
+        ) : (
+          <span class="admin-badge admin-badge--danger" style="font-size: 0.85rem;"><i class="bi bi-x-circle-fill"></i> Major Outage</span>
+        )}
+      </div>
+
+      <div style="display: grid; gap: 16px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px; background: var(--color-surface); border-radius: 12px; border: 1px solid var(--color-divider);">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <i class="bi bi-server" style="font-size: 1.25rem; color: var(--color-ink-muted);"></i>
+            <div>
+              <div class="text-body-strong">API Services</div>
+              <div class="text-caption text-muted">Core application endpoints</div>
+            </div>
+          </div>
+          <span style="font-weight: 500; font-size: 0.9rem;" class={apiStatus === 'operational' ? 'text-success' : 'text-danger'}>
+            {apiStatus === 'operational' ? 'Operational' : 'Down'}
+          </span>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px; background: var(--color-surface); border-radius: 12px; border: 1px solid var(--color-divider);">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <i class="bi bi-database" style="font-size: 1.25rem; color: var(--color-ink-muted);"></i>
+            <div>
+              <div class="text-body-strong">Database</div>
+              <div class="text-caption text-muted">Primary data store</div>
+            </div>
+          </div>
+          <span style="font-weight: 500; font-size: 0.9rem;" class={dbStatus === 'operational' ? 'text-success' : 'text-warning'}>
+            {dbStatus === 'operational' ? 'Operational' : 'Degraded'}
+          </span>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 16px; background: var(--color-surface); border-radius: 12px; border: 1px solid var(--color-divider);">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <i class="bi bi-hdd-network" style="font-size: 1.25rem; color: var(--color-ink-muted);"></i>
+            <div>
+              <div class="text-body-strong">Storage Infrastructure</div>
+              <div class="text-caption text-muted">File uploads and processing</div>
+            </div>
+          </div>
+          <span style="font-weight: 500; font-size: 0.9rem;" class={storageStatus === 'operational' ? 'text-success' : 'text-warning'}>
+            {storageStatus === 'operational' ? 'Operational' : 'Degraded'}
+          </span>
+        </div>
+      </div>
+      
+      <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--color-divider); text-align: right;" class="text-caption text-muted">
+        Last updated: <time id="last-updated" datetime={lastCheck}>{new Date(lastCheck).toLocaleString('en-US', { timeZone: 'UTC' })} UTC</time>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  const el = document.getElementById('last-updated');
+  if (el) {
+    const d = new Date(el.getAttribute('datetime')!);
+    el.textContent = d.toLocaleString();
+  }
+</script>
+
+<style>
+  .text-success { color: var(--color-success); }
+  .text-warning { color: var(--color-warning); }
+  .text-danger { color: var(--color-danger); }
+</style>

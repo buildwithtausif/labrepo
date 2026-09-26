@@ -1,0 +1,624 @@
+---
+import Layout from '../Layouts/Layout.astro'
+
+const { userId } = Astro.locals.auth();
+if (!userId) {
+  return Astro.redirect("/");
+}
+---
+
+<Layout title="Welcome to LabRepo" showNav={false}>
+    <div class="onboarding bg-canvas" id="onboarding">
+      <!-- Progress bar -->
+      <div class="onboarding__progress bg-canvas">
+        <div class="onboarding__progress-bar">
+          <div class="onboarding__progress-fill" id="progress-fill" style="width: 16.66%"></div>
+        </div>
+        <span class="text-caption text-muted" id="step-label">Step 1 of 6</span>
+      </div>
+
+      <!-- Steps container -->
+      <div class="onboarding__steps" id="steps-container">
+
+        <!-- Step 1: Welcome -->
+        <div class="onboarding__step active" data-step="1">
+          <div class="onboarding__step-content">
+            <div class="welcome-icon text-primary animate-fade-in"><i class="bi bi-hexagon-fill"></i></div>
+            <h1 class="text-display-lg mb-4 animate-fade-in">Welcome to LabRepo</h1>
+            <p class="text-lead text-muted mb-12 animate-fade-in">
+              A safe, organized home for all your college lab work.
+              Never lose a file again.
+            </p>
+
+            <div class="hierarchy-diagram animate-fade-in">
+              <div class="h-level">
+                <span class="text-display-lg text-muted"><i class="bi bi-calendar3"></i></span>
+                <span class="text-body-strong">Academic Session</span>
+                <span class="h-level__example">e.g., 2026–2027</span>
+              </div>
+              <div class="h-connector"></div>
+              <div class="h-level">
+                <span class="text-display-lg text-muted"><i class="bi bi-book"></i></span>
+                <span class="text-body-strong">Subject</span>
+                <span class="h-level__example">e.g., Machine Learning</span>
+              </div>
+              <div class="h-connector"></div>
+              <div class="h-level">
+                <span class="text-display-lg text-muted"><i class="bi bi-flask"></i></span>
+                <span class="text-body-strong">Work</span>
+                <span class="h-level__example">e.g., Experiment 5</span>
+              </div>
+              <div class="h-connector"></div>
+              <div class="h-level">
+                <span class="text-display-lg text-muted"><i class="bi bi-file-earmark-text"></i></span>
+                <span class="text-body-strong">Files</span>
+                <span class="h-level__example">train.py, data.csv</span>
+              </div>
+            </div>
+
+            <div class="flex justify-center gap-4 mt-12 animate-fade-in">
+              <button class="btn btn--primary" id="btn-start">Let's Get Started</button>
+              <button class="btn btn--ghost btn-skip" data-skip="2">Skip</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Create First Session -->
+        <div class="onboarding__step" data-step="2">
+          <div class="onboarding__step-content">
+            <div class="step-icon text-muted"><i class="bi bi-calendar3"></i></div>
+            <h2 class="text-display-lg mb-4">Create Your First Academic Session</h2>
+            <p class="text-lead text-muted mb-8">
+              An academic session groups all your work for a school year.
+              You can always add more later.
+            </p>
+
+            <div class="text-left mt-8">
+              <input 
+                type="text" 
+                class="input" 
+                id="session-input" 
+                placeholder="e.g., 2026–2027"
+                autocomplete="off"
+              />
+              <p class="text-caption text-muted mt-2">Tip: Use the academic year format like "2026–2027"</p>
+
+              <label class="flex items-center gap-2 mt-6 cursor-pointer text-caption text-muted">
+                <input type="checkbox" id="onboard-auto-delete" />
+                Auto-delete after session ends
+              </label>
+              <div id="onboard-delete-date-wrap" class="mt-4" style="display: none;">
+                <input type="date" class="input" id="onboard-delete-date" />
+              </div>
+            </div>
+
+            <div class="flex justify-center gap-4 mt-12">
+              <button class="btn btn--secondary-pill" id="btn-back-1">Back</button>
+              <button class="btn btn--primary" id="btn-create-session">Create Session</button>
+              <button class="btn btn--ghost btn-skip" data-skip="3">Skip</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Add Subjects -->
+        <div class="onboarding__step" data-step="3">
+          <div class="onboarding__step-content">
+            <div class="step-icon text-muted"><i class="bi bi-book"></i></div>
+            <h2 class="text-display-lg mb-4">Add Your Subjects</h2>
+            <p class="text-lead text-muted mb-8">
+              Add the subjects you're taking this session. 
+              Type a name and press Enter to add.
+            </p>
+
+            <div class="text-left mt-8">
+              <div class="flex gap-4">
+                <input 
+                  type="text" 
+                  class="input" 
+                  style="flex: 1;"
+                  id="subject-input" 
+                  placeholder="e.g., Machine Learning"
+                  autocomplete="off"
+                />
+                <button class="btn btn--secondary-pill" id="btn-add-subject">Add</button>
+              </div>
+
+              <div class="flex flex-wrap gap-2 mt-4 min-h-[32px]" id="subjects-list"></div>
+
+              <div class="mt-8">
+                <p class="text-caption text-muted mb-2">
+                  Quick add common subjects:
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  <button class="btn btn--ghost btn-suggest" data-name="Data Structures">Data Structures</button>
+                  <button class="btn btn--ghost btn-suggest" data-name="Machine Learning">Machine Learning</button>
+                  <button class="btn btn--ghost btn-suggest" data-name="Database Systems">Database Systems</button>
+                  <button class="btn btn--ghost btn-suggest" data-name="Operating Systems">Operating Systems</button>
+                  <button class="btn btn--ghost btn-suggest" data-name="Computer Networks">Computer Networks</button>
+                  <button class="btn btn--ghost btn-suggest" data-name="Web Development">Web Development</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-center gap-4 mt-12">
+              <button class="btn btn--secondary-pill" id="btn-back-2">Back</button>
+              <button class="btn btn--primary" id="btn-save-subjects">Continue</button>
+              <button class="btn btn--ghost btn-skip" data-skip="4">Skip</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: Upload Explainer -->
+        <div class="onboarding__step" data-step="4">
+          <div class="onboarding__step-content">
+            <div class="step-icon text-muted"><i class="bi bi-cloud-arrow-up"></i></div>
+            <h2 class="text-display-lg mb-4">How Uploads Work</h2>
+            <p class="text-lead text-muted mb-8">Uploading your lab work is simple. Here's how:</p>
+
+            <div class="flex flex-col gap-4 text-left mb-8">
+              <div class="store-utility-card flex items-start gap-4">
+                <span class="upload-step__num">1</span>
+                <div>
+                  <strong class="text-body-strong block mb-1">Select a subject</strong>
+                  <p class="text-caption text-muted">Choose which subject this work belongs to.</p>
+                </div>
+              </div>
+              <div class="store-utility-card flex items-start gap-4">
+                <span class="upload-step__num">2</span>
+                <div>
+                  <strong class="text-body-strong block mb-1">Name your work</strong>
+                  <p class="text-caption text-muted">Give it a title like "Experiment 5" or leave it as today's date.</p>
+                </div>
+              </div>
+              <div class="store-utility-card flex items-start gap-4">
+                <span class="upload-step__num">3</span>
+                <div>
+                  <strong class="text-body-strong block mb-1">Drop your files</strong>
+                  <p class="text-caption text-muted">Drag & drop or select multiple files. Up to 25 MB per upload.</p>
+                </div>
+              </div>
+              <div class="store-utility-card flex items-start gap-4">
+                <span class="upload-step__num">4</span>
+                <div>
+                  <strong class="text-body-strong block mb-1">Done!</strong>
+                  <p class="text-caption text-muted">Your files are safely stored and organized.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="store-utility-card text-left">
+              <h4 class="text-body-strong mb-2">Supported file types</h4>
+              <p class="text-caption text-muted">
+                .py .ipynb .js .ts .c .cpp .java .go .rs .sql .html .css .json .md .csv .pdf .docx .xlsx .env and many more
+              </p>
+            </div>
+
+            <div class="flex justify-center gap-4 mt-12">
+              <button class="btn btn--secondary-pill" id="btn-back-3">Back</button>
+              <button class="btn btn--primary" id="btn-continue-4">Continue</button>
+              <button class="btn btn--ghost btn-skip" data-skip="5">Skip</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 5: Data Safety -->
+        <div class="onboarding__step" data-step="5">
+          <div class="onboarding__step-content">
+            <div class="step-icon text-muted"><i class="bi bi-shield-check"></i></div>
+            <h2 class="text-display-lg mb-4">Your Data is Safe</h2>
+            <p class="text-lead text-muted mb-8">LabRepo protects your work with multiple safety nets.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left mb-8">
+              <div class="store-utility-card">
+                <div class="text-display-lg text-muted mb-2"><i class="bi bi-trash3"></i></div>
+                <h4 class="text-body-strong mb-2">Recycle Bin</h4>
+                <p class="text-caption text-muted">Deleted files go to the recycle bin. Recover them within 7 days.</p>
+              </div>
+              <div class="store-utility-card">
+                <div class="text-display-lg text-muted mb-2"><i class="bi bi-download"></i></div>
+                <h4 class="text-body-strong mb-2">Bulk Downloads</h4>
+                <p class="text-caption text-muted">Download an entire subject or session as a ZIP archive anytime.</p>
+              </div>
+              <div class="store-utility-card">
+                <div class="text-display-lg text-muted mb-2"><i class="bi bi-calendar3"></i></div>
+                <h4 class="text-body-strong mb-2">Auto-Delete</h4>
+                <p class="text-caption text-muted">Optionally auto-delete old sessions after the academic year ends.</p>
+              </div>
+              <div class="store-utility-card">
+                <div class="text-display-lg text-muted mb-2"><i class="bi bi-lock"></i></div>
+                <h4 class="text-body-strong mb-2">Private & Secure</h4>
+                <p class="text-caption text-muted">Only you can access your files. Authentication via Clerk.</p>
+              </div>
+            </div>
+
+            <div class="flex justify-center gap-4 mt-12">
+              <button class="btn btn--secondary-pill" id="btn-back-4">Back</button>
+              <button class="btn btn--primary" id="btn-continue-5">Almost Done</button>
+              <button class="btn btn--ghost btn-skip" data-skip="6">Skip</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 6: Finish -->
+        <div class="onboarding__step" data-step="6">
+          <div class="onboarding__step-content">
+            <div class="step-icon text-primary mb-4" style="font-size: 48px;"><i class="bi bi-emoji-smile"></i></div>
+            <h2 class="text-display-lg mb-4">You're All Set!</h2>
+            <p class="text-lead text-muted mb-8">
+              Your workspace is ready. Start by uploading your first lab work.
+            </p>
+
+            <div id="setup-summary" class="store-utility-card text-left mt-8">
+              <h4 class="text-body-strong mb-4">Your Setup</h4>
+              <div id="summary-content">
+                <p class="text-caption text-muted">Loading...</p>
+              </div>
+            </div>
+
+            <div class="flex justify-center gap-4 mt-12">
+              <button class="btn btn--primary" id="btn-finish">
+                Go to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', async () => {
+        const api = (window as any).__labrepo_api;
+        const showToast = (window as any).__labrepo_showToast;
+
+        // Wait for Clerk
+        await new Promise<void>((resolve) => {
+          const check = () => {
+            const c = (window as any).Clerk;
+            if (c && (typeof c.isReady === 'function' ? c.isReady() : c.loaded)) resolve();
+            else setTimeout(check, 100);
+          };
+          check();
+        });
+
+        // Check if already onboarded
+        try {
+          const status = await api.getUserStatus();
+          if (status.onboarding_completed) {
+            window.location.href = '/dashboard';
+            return;
+          }
+        } catch {}
+
+        let currentStep = 1;
+        let createdSessionId: number | null = null;
+        let subjects: string[] = [];
+
+        const progressFill = document.getElementById('progress-fill')!;
+        const stepLabel = document.getElementById('step-label')!;
+
+        function goToStep(step: number) {
+          currentStep = step;
+          
+          progressFill.style.width = `${(step / 6) * 100}%`;
+          stepLabel.textContent = `Step ${step} of 6`;
+
+          document.querySelectorAll('.onboarding__step').forEach((el) => {
+            const stepNum = parseInt((el as HTMLElement).dataset.step || '0');
+            el.classList.toggle('active', stepNum === step);
+          });
+        }
+
+        // Navigation
+        document.getElementById('btn-start')!.addEventListener('click', () => goToStep(2));
+        document.getElementById('btn-back-1')!.addEventListener('click', () => goToStep(1));
+        document.getElementById('btn-back-2')!.addEventListener('click', () => goToStep(2));
+        document.getElementById('btn-back-3')!.addEventListener('click', () => goToStep(3));
+        document.getElementById('btn-back-4')!.addEventListener('click', () => goToStep(4));
+        document.getElementById('btn-continue-4')!.addEventListener('click', () => goToStep(5));
+        document.getElementById('btn-continue-5')!.addEventListener('click', () => {
+          updateSummary();
+          goToStep(6);
+        });
+
+        // Skip buttons
+        document.querySelectorAll('.btn-skip').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const target = parseInt((btn as HTMLElement).dataset.skip || '0');
+            if (target === 6) updateSummary();
+            goToStep(target);
+          });
+        });
+
+        // Step 2: Create Session
+        const sessionInput = document.getElementById('session-input') as HTMLInputElement;
+        const autoDeleteCheck = document.getElementById('onboard-auto-delete') as HTMLInputElement;
+        const deleteDate = document.getElementById('onboard-delete-date') as HTMLInputElement;
+        const deleteDateWrap = document.getElementById('onboard-delete-date-wrap')!;
+
+        // Set default date
+        const now = new Date();
+        const endYear = now.getMonth() >= 6 ? now.getFullYear() + 1 : now.getFullYear();
+        deleteDate.value = `${endYear}-07-31`;
+
+        autoDeleteCheck.addEventListener('change', () => {
+          deleteDateWrap.style.display = autoDeleteCheck.checked ? 'block' : 'none';
+        });
+
+        document.getElementById('btn-create-session')!.addEventListener('click', async () => {
+          const name = sessionInput.value.trim();
+          if (!name) {
+            showToast('Please enter a session name', 'warning');
+            sessionInput.focus();
+            return;
+          }
+          try {
+            const result = await api.createSession(
+              name, 
+              autoDeleteCheck.checked, 
+              autoDeleteCheck.checked ? deleteDate.value : undefined
+            );
+            createdSessionId = result.session.id;
+            showToast('Session created!', 'success');
+            goToStep(3);
+          } catch (err: any) {
+            showToast(err.message, 'error');
+          }
+        });
+
+        sessionInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') document.getElementById('btn-create-session')!.click();
+        });
+
+        // Step 3: Add Subjects
+        const subjectInput = document.getElementById('subject-input') as HTMLInputElement;
+        const subjectsList = document.getElementById('subjects-list')!;
+
+        function renderSubjects() {
+          subjectsList.innerHTML = subjects.map((name, i) => `
+            <div class="subject-chip">
+              <span>${name}</span>
+              <button class="subject-chip__remove" data-index="${i}">×</button>
+            </div>
+          `).join('');
+
+          subjectsList.querySelectorAll('.subject-chip__remove').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const idx = parseInt((btn as HTMLElement).dataset.index || '0');
+              subjects.splice(idx, 1);
+              renderSubjects();
+            });
+          });
+        }
+
+        function addSubject(name: string) {
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          if (subjects.includes(trimmed)) {
+            showToast('Subject already added', 'warning');
+            return;
+          }
+          subjects.push(trimmed);
+          renderSubjects();
+          subjectInput.value = '';
+          subjectInput.focus();
+        }
+
+        document.getElementById('btn-add-subject')!.addEventListener('click', () => addSubject(subjectInput.value));
+        subjectInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') addSubject(subjectInput.value);
+        });
+
+        document.querySelectorAll('.btn-suggest').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            addSubject((btn as HTMLElement).dataset.name || '');
+          });
+        });
+
+        document.getElementById('btn-save-subjects')!.addEventListener('click', async () => {
+          if (subjects.length > 0 && createdSessionId) {
+            try {
+              await api.createSubjectsBatch(createdSessionId, subjects);
+              showToast(`${subjects.length} subjects added!`, 'success');
+            } catch (err: any) {
+              showToast(err.message, 'error');
+            }
+          }
+          goToStep(4);
+        });
+
+        // Step 6: Summary & Finish
+        function updateSummary() {
+          const content = document.getElementById('summary-content')!;
+          let html = '';
+          
+          if (sessionInput.value.trim()) {
+            html += `<div class="summary-item"><i class="bi bi-calendar3"></i> Session: <strong>${sessionInput.value.trim()}</strong></div>`;
+          }
+          if (subjects.length > 0) {
+            html += `<div class="summary-item"><i class="bi bi-book"></i> Subjects: <strong>${subjects.join(', ')}</strong></div>`;
+          }
+          if (!html) {
+            html = '<p class="text-caption text-muted">No setup steps completed — you can configure everything from the dashboard.</p>';
+          }
+
+          content.innerHTML = html;
+        }
+
+        document.getElementById('btn-finish')!.addEventListener('click', async () => {
+          try {
+            await api.completeOnboarding();
+            window.location.href = '/dashboard';
+          } catch (err: any) {
+            showToast('Failed to complete onboarding', 'error');
+            window.location.href = '/dashboard';
+          }
+        });
+      });
+    </script>
+
+    <style>
+      .onboarding {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .onboarding__progress {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: var(--space-4) var(--space-6);
+        display: flex;
+        align-items: center;
+        gap: var(--space-4);
+        border-bottom: 1px solid var(--color-divider);
+      }
+
+      .onboarding__progress-bar {
+        flex: 1;
+        height: 4px;
+        background: var(--color-divider);
+        border-radius: var(--radius-pill);
+        overflow: hidden;
+      }
+
+      .onboarding__progress-fill {
+        height: 100%;
+        background: var(--color-primary);
+        border-radius: var(--radius-pill);
+        transition: width 500ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .onboarding__steps {
+        flex: 1;
+        position: relative;
+      }
+
+      .onboarding__step {
+        display: none;
+        justify-content: center;
+        align-items: center;
+        min-height: calc(100vh - 60px);
+        padding: var(--space-12) var(--space-6);
+      }
+
+      .onboarding__step.active {
+        display: flex;
+      }
+
+      .onboarding__step-content {
+        max-width: 600px;
+        width: 100%;
+        text-align: center;
+      }
+
+      .welcome-icon {
+        font-size: 42px;
+        margin-bottom: var(--space-4);
+      }
+
+      .step-icon {
+        font-size: 32px;
+        margin-bottom: var(--space-4);
+      }
+
+      /* Hierarchy diagram */
+      .hierarchy-diagram {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+        margin-top: var(--space-8);
+      }
+
+      .h-level {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-4) var(--space-6);
+        background: var(--color-canvas);
+        border: 1px solid var(--color-divider);
+        border-radius: var(--radius-lg);
+        min-width: 320px;
+        text-align: left;
+      }
+
+      .h-level__example {
+        margin-left: auto;
+        font-size: 14px;
+        color: var(--color-ink-muted);
+      }
+
+      .h-connector {
+        width: 2px;
+        height: 16px;
+        background: var(--color-divider);
+        margin-left: 32px;
+      }
+
+      .subject-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: 6px 12px;
+        background: var(--color-canvas);
+        border: 1px solid var(--color-divider);
+        border-radius: var(--radius-pill);
+        font-size: 14px;
+      }
+
+      .subject-chip__remove {
+        background: none;
+        border: none;
+        color: var(--color-ink-muted);
+        cursor: pointer;
+        font-size: 16px;
+        line-height: 1;
+        padding: 0;
+      }
+
+      .upload-step__num {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        background: var(--color-primary);
+        border-radius: var(--radius-pill);
+        font-size: 14px;
+        font-weight: 600;
+        color: #ffffff;
+      }
+
+      .summary-item {
+        padding: var(--space-2) 0;
+        font-size: 14px;
+        border-bottom: 1px solid var(--color-divider);
+      }
+      .summary-item:last-child {
+        border-bottom: none;
+      }
+
+      .mb-1 { margin-bottom: 4px; }
+      .mb-2 { margin-bottom: 8px; }
+      .mb-4 { margin-bottom: 17px; }
+      .mb-6 { margin-bottom: 24px; }
+      .mb-8 { margin-bottom: 32px; }
+      .mb-12 { margin-bottom: 48px; }
+      .mt-2 { margin-top: 8px; }
+      .mt-4 { margin-top: 17px; }
+      .mt-6 { margin-top: 24px; }
+      .mt-8 { margin-top: 32px; }
+      .mt-12 { margin-top: 48px; }
+      .cursor-pointer { cursor: pointer; }
+      .block { display: block; }
+
+      @media (max-width: 768px) {
+        .h-level {
+          min-width: auto;
+          width: 100%;
+        }
+      }
+    </style>
+</Layout>

@@ -1,0 +1,380 @@
+---
+export interface Props {
+  minZoom?: number;
+  maxZoom?: number;
+  initialZoom?: number;
+  enablePan?: boolean;
+  enablePinchZoom?: boolean;
+  class?: string;
+  id?: string;
+}
+
+const { 
+  minZoom = 0.5, 
+  maxZoom = 5, 
+  initialZoom = 1, 
+  enablePan = true,
+  enablePinchZoom = true,
+  class: className = '', 
+  id 
+} = Astro.props;
+---
+
+<zoom-pan-container 
+  id={id}
+  class={`zoom-pan-wrapper ${className}`} 
+  data-min-zoom={minZoom} 
+  data-max-zoom={maxZoom} 
+  data-initial-zoom={initialZoom}
+  data-enable-pan={enablePan ? "true" : "false"}
+  data-enable-pinch={enablePinchZoom ? "true" : "false"}
+>
+  <div class="zoom-pan-viewport">
+    <div class="zoom-pan-content">
+      <slot />
+    </div>
+  </div>
+  
+  <div class="zoom-controls">
+    <button class="btn btn--ghost btn--sm zoom-out"><i class="bi bi-zoom-out"></i></button>
+    <button class="btn btn--ghost btn--sm zoom-reset" style="font-weight: 600; font-size: 0.8rem;">1:1</button>
+    <button class="btn btn--ghost btn--sm zoom-in"><i class="bi bi-zoom-in"></i></button>
+  </div>
+</zoom-pan-container>
+
+<style>
+  .zoom-pan-wrapper {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+  }
+  
+  .zoom-pan-viewport {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+  }
+
+  .zoom-pan-viewport:active {
+    cursor: grabbing;
+  }
+  
+  .zoom-pan-content {
+    transform-origin: 50% 50%;
+    will-change: transform;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .zoom-pan-content :global(img),
+  .zoom-pan-content :global(> *) {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    pointer-events: none; /* Crucial so dragging images doesn't ghost-drag */
+  }
+
+  .zoom-controls {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    gap: 8px;
+    z-index: 10;
+    padding: 6px;
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--color-divider);
+    border-radius: var(--radius-md);
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    .zoom-controls {
+      display: none !important;
+    }
+  }
+</style>
+
+<script>
+  class ZoomPanContainer extends HTMLElement {
+    private viewport: HTMLElement;
+    private content: HTMLElement;
+    private scale = 1;
+    private minScale = 0.5;
+    private maxScale = 5;
+    
+    // Pan state
+    private isDragging = false;
+    private startX = 0;
+    private startY = 0;
+    private translateX = 0;
+    private translateY = 0;
+    
+    // Pinch state
+    private initialDistance = 0;
+    private initialScale = 1;
+    private initialPinchX = 0;
+    private initialPinchY = 0;
+    
+    // Physics
+    private rafId: number | null = null;
+    private targetX = 0;
+    private targetY = 0;
+    private initialTargetX = 0;
+    private initialTargetY = 0;
+    private targetScale = 1;
+
+    constructor() {
+      super();
+      this.viewport = this.querySelector('.zoom-pan-viewport')!;
+      this.content = this.querySelector('.zoom-pan-content')!;
+      
+      this.minScale = parseFloat(this.dataset.minZoom || '0.5');
+      this.maxScale = parseFloat(this.dataset.maxZoom || '5');
+      this.targetScale = this.scale = parseFloat(this.dataset.initialZoom || '1');
+      
+      this.bindEvents();
+      this.updateTransform();
+      this.loop();
+    }
+    
+    private bindEvents() {
+      const btnIn = this.querySelector('.zoom-in');
+      const btnOut = this.querySelector('.zoom-out');
+      const btnReset = this.querySelector('.zoom-reset');
+
+      btnIn?.addEventListener('click', () => this.zoomAtCenter(this.targetScale + 0.5));
+      btnOut?.addEventListener('click', () => this.zoomAtCenter(this.targetScale - 0.5));
+      btnReset?.addEventListener('click', () => this.reset());
+
+      this.viewport.addEventListener('wheel', this.onWheel.bind(this), { passive: false });
+      
+      // Mouse
+      this.viewport.addEventListener('mousedown', this.onMouseDown.bind(this));
+      window.addEventListener('mousemove', this.onMouseMove.bind(this));
+      window.addEventListener('mouseup', this.onMouseUp.bind(this));
+
+      // Touch
+      this.viewport.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
+      this.viewport.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
+      this.viewport.addEventListener('touchend', this.onTouchEnd.bind(this));
+      this.viewport.addEventListener('touchcancel', this.onTouchEnd.bind(this));
+    }
+    
+    private clampScale(s: number) {
+      return Math.max(this.minScale, Math.min(this.maxScale, s));
+    }
+    
+    public resetState() {
+      this.targetScale = 1;
+      this.targetX = 0;
+      this.targetY = 0;
+      this.scale = 1;
+      this.translateX = 0;
+      this.translateY = 0;
+    }
+    
+    private reset() {
+      this.resetState();
+    }
+    
+    private zoomAtCenter(newScale: number) {
+      newScale = this.clampScale(newScale);
+      if (newScale === 1) {
+        this.reset();
+        return;
+      }
+      const rect = this.viewport.getBoundingClientRect();
+      this.zoomAtPoint(newScale, rect.width / 2, rect.height / 2);
+    }
+    
+    private zoomAtPoint(newScale: number, cx: number, cy: number) {
+      newScale = this.clampScale(newScale);
+      if (newScale === 1) {
+        this.reset();
+        return;
+      }
+      
+      const rect = this.viewport.getBoundingClientRect();
+      const viewCenterX = rect.width / 2;
+      const viewCenterY = rect.height / 2;
+      
+      const px = cx - viewCenterX;
+      const py = cy - viewCenterY;
+      
+      const imageX = (px - this.targetX) / this.targetScale;
+      const imageY = (py - this.targetY) / this.targetScale;
+      
+      this.targetScale = newScale;
+      this.targetX = px - imageX * this.targetScale;
+      this.targetY = py - imageY * this.targetScale;
+      
+      this.constrainBounds();
+    }
+    
+    private onWheel(e: WheelEvent) {
+      if (e.ctrlKey || e.metaKey || !this.enablePan) {
+        if (!this.enablePinch) return;
+        
+        e.preventDefault();
+        const rect = this.viewport.getBoundingClientRect();
+        const delta = e.deltaY * -0.01;
+        const s = this.clampScale(this.targetScale * Math.exp(delta));
+        this.zoomAtPoint(s, e.clientX - rect.left, e.clientY - rect.top);
+      } else {
+        if (!this.enablePan) return;
+        e.preventDefault();
+        this.targetX -= e.deltaX;
+        this.targetY -= e.deltaY;
+        this.constrainBounds();
+      }
+    }
+    
+    private onMouseDown(e: MouseEvent) {
+      if (e.button !== 0 || !this.enablePan) return;
+      this.isDragging = true;
+      this.startX = e.clientX;
+      this.startY = e.clientY;
+      this.initialTargetX = this.targetX;
+      this.initialTargetY = this.targetY;
+    }
+    
+    private onMouseMove(e: MouseEvent) {
+      if (!this.isDragging) return;
+      const dx = e.clientX - this.startX;
+      const dy = e.clientY - this.startY;
+      this.targetX = this.initialTargetX + dx;
+      this.targetY = this.initialTargetY + dy;
+      this.constrainBounds();
+    }
+    
+    private onMouseUp() {
+      this.isDragging = false;
+    }
+    
+    private getDistance(t1: Touch, t2: Touch) {
+      return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+    }
+    
+    private getCenter(t1: Touch, t2: Touch) {
+      return {
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2
+      };
+    }
+    
+    private onTouchStart(e: TouchEvent) {
+      if (e.touches.length === 1 && this.targetScale > 1 && this.enablePan) {
+        e.preventDefault();
+        this.isDragging = true;
+        this.startX = e.touches[0].clientX;
+        this.startY = e.touches[0].clientY;
+        this.initialTargetX = this.targetX;
+        this.initialTargetY = this.targetY;
+      } else if (e.touches.length === 2 && this.enablePinch) {
+        e.preventDefault();
+        this.isDragging = false;
+        this.initialDistance = this.getDistance(e.touches[0], e.touches[1]);
+        this.initialScale = this.targetScale;
+        
+        const rect = this.viewport.getBoundingClientRect();
+        const center = this.getCenter(e.touches[0], e.touches[1]);
+        this.initialPinchX = center.x - rect.left;
+        this.initialPinchY = center.y - rect.top;
+        
+        this.initialTargetX = this.targetX;
+        this.initialTargetY = this.targetY;
+      }
+    }
+    
+    private onTouchMove(e: TouchEvent) {
+      if (e.touches.length === 1 && this.isDragging) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - this.startX;
+        const dy = e.touches[0].clientY - this.startY;
+        this.targetX = this.initialTargetX + dx;
+        this.targetY = this.initialTargetY + dy;
+        this.constrainBounds();
+      } else if (e.touches.length === 2 && this.enablePinch) {
+        e.preventDefault();
+        const dist = this.getDistance(e.touches[0], e.touches[1]);
+        const scaleFactor = dist / this.initialDistance;
+        
+        const rect = this.viewport.getBoundingClientRect();
+        const center = this.getCenter(e.touches[0], e.touches[1]);
+        const cx = center.x - rect.left;
+        const cy = center.y - rect.top;
+        
+        // Calculate the drift of the pinch center
+        const dx = cx - this.initialPinchX;
+        const dy = cy - this.initialPinchY;
+        
+        // First zoom relative to the original pinch center
+        this.zoomAtPoint(this.initialScale * scaleFactor, this.initialPinchX, this.initialPinchY);
+        
+        // Then apply the pan drift
+        this.targetX += dx;
+        this.targetY += dy;
+        
+        // Update origin so drift accumulates properly
+        this.initialPinchX = cx;
+        this.initialPinchY = cy;
+        this.initialScale = this.targetScale;
+        this.initialDistance = dist;
+      }
+    }
+    
+    private onTouchEnd(e: TouchEvent) {
+      if (e.touches.length < 2) {
+        this.initialDistance = 0;
+      }
+      if (e.touches.length === 0) {
+        this.isDragging = false;
+      }
+    }
+    
+    private constrainBounds() {
+      // Allow free panning per user request, don't snap to 0
+    }
+    
+    private loop() {
+      // Linear interpolation for silky smooth pan/zoom
+      this.scale += (this.targetScale - this.scale) * 0.2;
+      this.translateX += (this.targetX - this.translateX) * 0.2;
+      this.translateY += (this.targetY - this.translateY) * 0.2;
+      
+      // Snap exactly if very close
+      if (Math.abs(this.targetScale - this.scale) < 0.005) this.scale = this.targetScale;
+      if (Math.abs(this.targetX - this.translateX) < 0.5) this.translateX = this.targetX;
+      if (Math.abs(this.targetY - this.translateY) < 0.5) this.translateY = this.targetY;
+      
+      this.updateTransform();
+      this.rafId = requestAnimationFrame(this.loop.bind(this));
+    }
+    
+    private get enablePan() { return this.dataset.enablePan !== 'false'; }
+    private get enablePinch() { return this.dataset.enablePinch !== 'false'; }
+
+    private updateTransform() {
+      this.content.style.transform = `translate(${this.translateX}px, ${this.translateY}px) scale(${this.scale})`;
+    }
+    
+    disconnectedCallback() {
+      if (this.rafId) cancelAnimationFrame(this.rafId);
+    }
+  }
+  
+  if (!customElements.get('zoom-pan-container')) {
+    customElements.define('zoom-pan-container', ZoomPanContainer);
+  }
+</script>

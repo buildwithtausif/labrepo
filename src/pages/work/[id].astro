@@ -1,0 +1,844 @@
+---
+import Layout from '../../Layouts/Layout.astro'
+import ZoomPan from '../../components/ZoomPan.astro'
+import { NotebookIsland } from '../../components/NotebookIsland.tsx'
+
+const { userId } = Astro.locals.auth();
+if (!userId) {
+  return Astro.redirect("/");
+}
+
+const { id } = Astro.params;
+---
+
+<Layout title="Work">
+    <div class="container page-content" id="work-page" data-work-id={id}>
+      <div id="page-loading" class="empty-state">
+        <div class="spinner spinner--lg"></div>
+      </div>
+
+      <div id="page-content" style="display: none;">
+        <nav class="breadcrumb">
+          <a href="/dashboard">Dashboard</a>
+          <span class="breadcrumb__separator">›</span>
+          <a href="#" id="session-link">Session</a>
+          <span class="breadcrumb__separator">›</span>
+          <a href="#" id="subject-link">Subject</a>
+          <span class="breadcrumb__separator">›</span>
+          <span id="work-name-crumb" class="text-ink">Work</span>
+        </nav>
+
+        <div class="page-header flex items-center justify-between mb-8">
+          <div>
+            <h1 id="work-title" class="text-display-lg">Work</h1>
+            <p id="work-stats" class="text-muted mt-2"></p>
+          </div>
+          <div class="flex gap-4">
+            <button class="btn btn--secondary-pill" id="btn-download-work"><i class="bi bi-download"></i> Download ZIP</button>
+            <button class="btn btn--primary" id="btn-upload-more">+ Upload Files</button>
+          </div>
+        </div>
+
+        <!-- File list -->
+        <div id="files-list"></div>
+
+        <div id="files-empty" class="empty-state" style="display: none;">
+          <div class="text-hero text-muted mb-4"><i class="bi bi-file-earmark-text"></i></div>
+          <h3 class="text-display-lg mb-2">No files yet</h3>
+          <p class="text-lead text-muted mb-8">Upload files to this work.</p>
+          <button class="btn btn--primary" id="btn-empty-upload">Upload Files</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal" class="modal-overlay" style="display: none;">
+      <div class="modal" style="max-width: 520px;">
+        <h3 class="text-body-strong mb-4">Upload Files</h3>
+        <div class="drop-zone" id="drop-zone">
+          <div class="text-display-lg text-muted mb-2"><i class="bi bi-folder2-open"></i></div>
+          <p class="text-body-strong mb-1">Drag & drop files here, or click to browse</p>
+          <div class="upload-help-row">
+            <p class="text-caption text-muted">Max 25 MB total</p>
+            <div class="supported-files-help" id="supported-files-help">
+              <button type="button" class="supported-files-info" id="supported-files-info" aria-label="Show supported file types" aria-expanded="false">?</button>
+              <div class="supported-files-popover" id="supported-files-popover" role="tooltip">
+                <div class="supported-files-popover__title">Supported file types</div>
+                <div class="supported-files-popover__body" id="supported-files-list"></div>
+              </div>
+            </div>
+          </div>
+          <p class="text-caption text-muted mt-2">Click the ? for the full supported file list.</p>
+          <input type="file" id="file-input" multiple style="display: none;" />
+        </div>
+        <div id="selected-files" class="mt-4" style="max-height: 240px; overflow-y: auto; overflow-x: hidden; padding-right: 8px;"></div>
+        <div id="upload-progress" style="display: none;" class="mt-6">
+          <div class="progress-bar"><div class="progress-bar__fill" id="progress-fill"></div></div>
+          <p id="upload-status" class="text-caption text-muted mt-2"></p>
+        </div>
+        <div class="flex justify-between gap-4 mt-8">
+          <button class="btn btn--ghost" id="upload-cancel">Cancel</button>
+          <button class="btn btn--primary" id="upload-save">Upload</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Panel -->
+    <div id="preview-panel" class="preview-panel" style="display: none;">
+      <div class="bottom-sheet-handle hide-desktop" id="preview-minimize">
+        <div class="handle-bar"></div>
+      </div>
+      <div class="preview-panel__header" style="flex-direction: column; align-items: stretch; gap: 0; padding: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;">
+          <div class="flex items-center gap-3">
+            <button type="button" class="btn btn--ghost btn--icon" id="preview-fullscreen" aria-label="Toggle fullscreen">
+              <i class="bi bi-arrows-angle-expand"></i>
+            </button>
+            <button type="button" class="btn btn--ghost btn--icon" id="preview-close" aria-label="Close preview">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-caption text-muted" id="preview-size"></span>
+            <button class="btn btn--primary btn--sm" id="preview-download">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              Download
+            </button>
+          </div>
+        </div>
+        <div style="padding: 10px 16px; background: rgba(0,0,0,0.15); border-top: 1px solid var(--color-divider); display: flex; align-items: center; gap: 8px;">
+           <i class="bi bi-file-earmark-text text-muted" id="preview-file-icon"></i>
+           <h3 class="text-body-strong truncate" id="preview-filename" style="margin: 0; font-size: 0.95rem;">Loading...</h3>
+        </div>
+      </div>
+      
+      <div id="preview-content-container" class="preview-panel__content relative">
+        <div id="preview-default-content" class="w-full h-full"></div>
+        
+        <ZoomPan id="preview-zoom-container" class="hidden absolute inset-0">
+          <div id="preview-zoom-slot-content" class="w-full h-full flex items-center justify-center"></div>
+        </ZoomPan>
+
+        <div id="preview-notebook-container" class="hidden w-full h-full overflow-y-auto">
+          <NotebookIsland client:load />
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', async () => {
+        const api = (window as any).__labrepo_api;
+        const showToast = (window as any).__labrepo_showToast;
+        const downloadBlob = (window as any).__labrepo_downloadBlob;
+        const formatSize = (window as any).__labrepo_formatSize;
+        const formatRelativeTime = (window as any).__labrepo_formatRelativeTime;
+
+        await new Promise<void>((r) => { const c = () => { if ((window as any).Clerk?.session) r(); else setTimeout(c, 100); }; c(); });
+
+        const workId = parseInt(document.getElementById('work-page')!.dataset.workId || '0');
+
+        let work: any;
+        try {
+          const result = await api.getWork(workId);
+          work = result.work;
+        } catch {
+          showToast('Work not found', 'error');
+          window.location.href = '/dashboard';
+          return;
+        }
+
+        document.getElementById('work-title')!.textContent = work.title;
+        document.getElementById('work-name-crumb')!.textContent = work.title;
+        document.title = `${work.title} | LabRepo`;
+
+        const sessionLink = document.getElementById('session-link') as HTMLAnchorElement;
+        sessionLink.href = `/session/${work.session_id}`;
+        sessionLink.textContent = work.session_name;
+
+        const subjectLink = document.getElementById('subject-link') as HTMLAnchorElement;
+        subjectLink.href = `/subject/${work.subject_id}`;
+        subjectLink.textContent = work.subject_name;
+
+        const textExts = new Set(['ipynb','py','js','mjs','cjs','jsx','ts','tsx','c','cpp','h','hpp','java','kt','cs','go','rs','swift','php','rb','r','scala','sql','html','css','scss','json','yaml','yml','xml','md','txt','csv','env','sh','bat','ps1','toml','ini','cfg','conf','log','dockerfile','tex','rtf']);
+        const imageExts = new Set(['jpg', 'jpeg', 'png', 'webp', 'svg', 'gif']);
+
+        const langMap: Record<string, string> = {
+          py: 'python', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
+          c: 'c', h: 'c', hpp: 'cpp', cpp: 'cpp', java: 'java', kt: 'kotlin', cs: 'csharp', go: 'go', rs: 'rust',
+          swift: 'swift', php: 'php', rb: 'ruby', r: 'r', scala: 'scala', sql: 'sql',
+          html: 'html', css: 'css', scss: 'scss', json: 'json', yaml: 'yaml', yml: 'yaml',
+          xml: 'xml', md: 'markdown', txt: 'plaintext', csv: 'plaintext',
+          env: 'plaintext', sh: 'bash', bat: 'batch', ps1: 'powershell', toml: 'toml', ini: 'ini', cfg: 'ini', conf: 'ini', log: 'plaintext', dockerfile: 'dockerfile', tex: 'latex', rtf: 'plaintext'
+        };
+
+        await loadFiles();
+
+        async function loadFiles() {
+          try {
+            const { files } = await api.getFiles(workId);
+            
+            document.getElementById('page-loading')!.style.display = 'none';
+            document.getElementById('page-content')!.style.display = 'block';
+
+            if (files.length === 0) {
+              document.getElementById('files-list')!.style.display = 'none';
+              document.getElementById('files-empty')!.style.display = 'flex';
+            } else {
+              document.getElementById('files-list')!.style.display = 'block';
+              document.getElementById('files-empty')!.style.display = 'none';
+              renderFiles(files);
+            }
+
+            const totalSize = files.reduce((a: number, f: any) => a + (f.sizeBytes || 0), 0);
+            document.getElementById('work-stats')!.textContent = 
+              `${files.length} file${files.length !== 1 ? 's' : ''} · ${formatSize(totalSize)}`;
+          } catch (e: any) {
+            console.error('loadFiles error:', e);
+            showToast('Failed to load files', 'error');
+          }
+        }
+
+
+        function renderFiles(files: any[]) {
+          const list = document.getElementById('files-list')!;
+          list.innerHTML = files.map((file: any) => {
+            const isText = textExts.has(file.extension);
+            const isImage = imageExts.has(file.extension);
+            const isPreviewable = isText || isImage;
+            return `
+              <div class="store-utility-card animate-fade-in mb-4 px-6 py-4">
+                <div class="flex items-center justify-between flex-wrap gap-4">
+                  <div class="flex items-center gap-4 min-w-0" style="flex: 1 1 200px;">
+                    <span class="text-display-lg text-muted">${isImage ? '<i class="bi bi-image"></i>' : isText ? '<i class="bi bi-file-earmark-code"></i>' : '<i class="bi bi-box"></i>'}</span>
+                    <div class="min-w-0">
+                      <div class="text-body-strong truncate">${file.filename}</div>
+                      <div class="flex gap-4 items-center text-caption text-muted mt-1 flex-wrap">
+                        <span class="btn--dark-utility p-1 rounded">.${file.extension}</span>
+                        <span>${formatSize(file.sizeBytes || 0)}</span>
+                        <span>${formatRelativeTime(file.createdAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex gap-2 shrink-0 flex-wrap">
+                    ${isPreviewable ? `<button class="btn btn--secondary-pill btn-preview btn--sm" data-id="${file.id}" data-name="${file.filename}" data-ext="${file.extension}">Preview</button>` : ''}
+                    <button class="btn btn--secondary-pill btn-download-file btn--sm" data-id="${file.id}" data-name="${file.filename}"><i class="bi bi-download"></i></button>
+                    <button class="btn btn--ghost btn-delete-file btn--sm" data-id="${file.id}" data-name="${file.filename}" style="color: #ff3b30;"><i class="bi bi-trash3"></i></button>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          list.querySelectorAll('.btn-preview').forEach((btn: any) => {
+            btn.addEventListener('click', () => openPreview(parseInt(btn.dataset.id), btn.dataset.name, btn.dataset.ext));
+          });
+
+          list.querySelectorAll('.btn-download-file').forEach((btn: any) => {
+            btn.addEventListener('click', async () => {
+              try {
+                const blob = await api.downloadFile(parseInt(btn.dataset.id));
+                downloadBlob(blob, btn.dataset.name);
+              } catch (err: any) { showToast(err.message, 'error'); }
+            });
+          });
+
+          list.querySelectorAll('.btn-delete-file').forEach((btn: any) => {
+            btn.addEventListener('click', async () => {
+              if (confirm(`Delete "${btn.dataset.name}"?`)) {
+                try {
+                  await api.deleteFile(parseInt(btn.dataset.id));
+                  showToast('File moved to recycle bin', 'success');
+                  await loadFiles();
+                } catch (err: any) { showToast(err.message, 'error'); }
+              }
+            });
+          });
+        }
+
+        const previewPanel = document.getElementById('preview-panel')!;
+        let currentPreviewId: number | null = null;
+        let currentObjectUrl: string | null = null;
+
+        async function openPreview(fileId: number, filename: string, ext: string) {
+          currentPreviewId = fileId;
+          previewPanel.style.display = 'flex';
+          document.body.classList.add('preview-open');
+          document.getElementById('preview-filename')!.textContent = filename;
+          
+          const defaultContent = document.getElementById('preview-default-content')!;
+          const zoomContainer = document.getElementById('preview-zoom-container') as any;
+          const zoomSlot = document.getElementById('preview-zoom-slot-content')!;
+          const notebookContainer = document.getElementById('preview-notebook-container')!;
+          
+          defaultContent.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
+          defaultContent.classList.remove('hidden');
+          zoomContainer.classList.add('hidden');
+          zoomSlot.innerHTML = '';
+          notebookContainer.classList.add('hidden');
+          window.dispatchEvent(new Event('clear-notebook'));
+          
+          if (zoomContainer.resetState) zoomContainer.resetState();
+
+          if (imageExts.has(ext)) {
+            try {
+              const blob = await api.downloadFile(fileId);
+              document.getElementById('preview-size')!.textContent = formatSize(blob.size);
+              currentObjectUrl = URL.createObjectURL(blob);
+              
+              defaultContent.classList.add('hidden');
+              zoomContainer.classList.remove('hidden');
+              zoomContainer.dataset.enablePan = 'true';
+              zoomContainer.dataset.enablePinch = 'true';
+              zoomSlot.innerHTML = `<img src="${currentObjectUrl}" style="max-width: 100%; max-height: 100%;" />`;
+            } catch (err: any) {
+              defaultContent.classList.remove('hidden');
+              zoomContainer.classList.add('hidden');
+              defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load image</p></div>`;
+            }
+            return;
+          }
+
+          try {
+            const result = await api.previewFile(fileId);
+            document.getElementById('preview-size')!.textContent = formatSize(result.file.size_bytes);
+            
+            if (ext === 'ipynb') {
+              defaultContent.classList.add('hidden');
+              zoomContainer.classList.add('hidden');
+              notebookContainer.classList.remove('hidden');
+              window.dispatchEvent(new CustomEvent('preview-notebook', { detail: { content: result.content } }));
+              return;
+            }
+
+            const lang = langMap[ext] || 'plaintext';
+            const escaped = result.content
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;');
+
+            notebookContainer.classList.add('hidden');
+            zoomContainer.classList.add('hidden');
+            zoomSlot.innerHTML = '';
+            defaultContent.classList.remove('hidden');
+            
+            defaultContent.innerHTML = `
+              <div style="width: 100%; height: 100%; overflow: auto; padding: 24px;">
+                <pre class="preview-code" style="margin: 0;"><code class="language-${lang}">${escaped}</code></pre>
+              </div>
+            `;
+            
+            const codeEl = defaultContent.querySelector('code');
+            if (codeEl && (window as any).hljs) {
+              (window as any).hljs.highlightElement(codeEl);
+              if ((window as any).hljs.lineNumbersBlock) {
+                (window as any).hljs.lineNumbersBlock(codeEl);
+              }
+            }
+          } catch (err: any) {
+            defaultContent.classList.remove('hidden');
+            zoomContainer.classList.add('hidden');
+            notebookContainer.classList.add('hidden');
+            defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load preview</p></div>`;
+          }
+        }
+
+        function closePreview() {
+          previewPanel.style.display = 'none';
+          document.body.classList.remove('preview-open');
+          currentPreviewId = null;
+          if (currentObjectUrl) {
+            URL.revokeObjectURL(currentObjectUrl);
+            currentObjectUrl = null;
+          }
+        }
+
+        document.getElementById('preview-close')!.addEventListener('click', closePreview);
+        
+        let isFullscreen = false;
+        document.getElementById('preview-fullscreen')!.addEventListener('click', () => {
+          isFullscreen = !isFullscreen;
+          const panel = document.getElementById('preview-panel');
+          const btnIcon = document.querySelector('#preview-fullscreen i') || document.querySelector('#preview-fullscreen svg');
+          
+          if (isFullscreen) {
+            panel?.classList.add('preview-panel--fullscreen');
+            btnIcon?.classList.remove('bi-arrows-angle-expand');
+            btnIcon?.classList.add('bi-arrows-angle-contract');
+          } else {
+            panel?.classList.remove('preview-panel--fullscreen');
+            btnIcon?.classList.remove('bi-arrows-angle-contract');
+            btnIcon?.classList.add('bi-arrows-angle-expand');
+          }
+        });
+        document.getElementById('preview-minimize')!.addEventListener('click', closePreview);
+
+        document.getElementById('preview-download')!.addEventListener('click', async () => {
+          if (currentPreviewId === null) return;
+          try {
+            const blob = await api.downloadFile(currentPreviewId);
+            const filename = document.getElementById('preview-filename')!.textContent || 'file';
+            downloadBlob(blob, filename);
+          } catch (err: any) { showToast(err.message, 'error'); }
+        });
+
+        const uploadModal = document.getElementById('upload-modal')!;
+        const dropZone = document.getElementById('drop-zone')!;
+        const fileInput = document.getElementById('file-input') as HTMLInputElement;
+        const selectedFilesDiv = document.getElementById('selected-files')!;
+        let selectedFiles: File[] = [];
+
+        const allowedExtensions = new Set(['py','ipynb','js','mjs','cjs','jsx','ts','tsx','c','cpp','h','hpp','java','kt','cs','go','rs','swift','php','rb','r','scala','sql','html','css','scss','json','yaml','yml','xml','md','txt','csv','parquet','feather','pkl','joblib','onnx','pt','pth','keras','h5','env','sh','bat','ps1','toml','ini','cfg','conf','log','dockerfile','pdf','doc','docx','xls','xlsx','ppt','pptx','rtf','tex']);
+        const supportedFileList = Array.from(allowedExtensions).sort().join(', ');
+
+        function getExtension(filename: string): string {
+          const parts = filename.split('.');
+          if (parts.length < 2) return '';
+          return parts[parts.length - 1].toLowerCase();
+        }
+
+        function getUnsupportedFiles(files: File[]) {
+          // Validation is strictly delegated to the backend, which resolves dynamic per-user permissions.
+          return [];
+        }
+
+        function resetUploadProgress() {
+          const progress = document.getElementById('upload-progress')!;
+          const fill = document.getElementById('progress-fill')!;
+          const status = document.getElementById('upload-status')!;
+          progress.style.display = 'none';
+          fill.style.width = '0%';
+          status.textContent = '';
+        }
+
+        const supportedFilesHelp = document.getElementById('supported-files-help')!;
+        const supportedFilesInfo = document.getElementById('supported-files-info')!;
+        const supportedFilesPopover = document.getElementById('supported-files-popover')!;
+        const supportedFilesList = document.getElementById('supported-files-list')!;
+        supportedFilesList.textContent = supportedFileList;
+
+        function setSupportedFilesOpen(isOpen: boolean) {
+          supportedFilesHelp.classList.toggle('is-open', isOpen);
+          supportedFilesInfo.setAttribute('aria-expanded', String(isOpen));
+        }
+
+        supportedFilesInfo.addEventListener('click', (event) => {
+          event.stopPropagation();
+          setSupportedFilesOpen(!supportedFilesHelp.classList.contains('is-open'));
+        });
+
+        supportedFilesHelp.addEventListener('mouseenter', () => setSupportedFilesOpen(true));
+        supportedFilesHelp.addEventListener('mouseleave', () => setSupportedFilesOpen(false));
+        supportedFilesHelp.addEventListener('focusin', () => setSupportedFilesOpen(true));
+        supportedFilesHelp.addEventListener('focusout', () => setSupportedFilesOpen(false));
+
+        document.addEventListener('click', (event) => {
+          if (!supportedFilesHelp.contains(event.target as Node)) {
+            setSupportedFilesOpen(false);
+          }
+        });
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            setSupportedFilesOpen(false);
+          }
+        });
+
+        function openUploadModal() {
+          uploadModal.style.display = 'flex';
+          selectedFiles = [];
+          fileInput.value = '';
+          selectedFilesDiv.innerHTML = '';
+          resetUploadProgress();
+        }
+
+        document.getElementById('btn-upload-more')!.addEventListener('click', openUploadModal);
+        document.getElementById('btn-empty-upload')?.addEventListener('click', openUploadModal);
+        document.getElementById('upload-cancel')!.addEventListener('click', () => { uploadModal.style.display = 'none'; });
+        uploadModal.addEventListener('click', (e) => { if (e.target === uploadModal) uploadModal.style.display = 'none'; });
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drop-zone--active'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('drop-zone--active'); });
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('drop-zone--active');
+          if (e.dataTransfer?.files) {
+            const droppedFiles = Array.from(e.dataTransfer.files);
+            const unsupportedFiles = getUnsupportedFiles(droppedFiles);
+            if (unsupportedFiles.length > 0) {
+              showToast(`Unsupported file extension: ${unsupportedFiles.map((file) => file.name).join(', ')}`, 'error');
+              resetUploadProgress();
+              return;
+            }
+
+            selectedFiles = [...selectedFiles, ...droppedFiles];
+            renderSelected();
+          }
+        });
+
+        fileInput.addEventListener('change', () => {
+          if (fileInput.files) {
+            const pickedFiles = Array.from(fileInput.files);
+            const unsupportedFiles = getUnsupportedFiles(pickedFiles);
+            if (unsupportedFiles.length > 0) {
+              showToast(`Unsupported file extension: ${unsupportedFiles.map((file) => file.name).join(', ')}`, 'error');
+              fileInput.value = ''; 
+              resetUploadProgress();
+              return;
+            }
+
+            selectedFiles = [...selectedFiles, ...pickedFiles];
+            renderSelected();
+          }
+        });
+
+        function renderSelected() {
+          const total = selectedFiles.reduce((a, f) => a + f.size, 0);
+          const tooLarge = total > 25 * 1024 * 1024;
+          selectedFilesDiv.innerHTML = selectedFiles.map((f, i) => `
+            <div class="flex items-center justify-between py-2 border-b text-caption text-muted">
+              <span class="truncate mr-4"><i class="bi bi-file-earmark-text"></i> ${f.name}</span>
+              <span class="flex items-center gap-2">${formatSize(f.size)} <button class="btn btn--ghost rm-file" data-i="${i}" style="padding: 2px 8px;">×</button></span>
+            </div>
+          `).join('') + (selectedFiles.length > 0 ? `<div class="text-caption mt-2 ${tooLarge ? 'text-danger' : 'text-muted'}">Total: ${formatSize(total)} / 25 MB</div>` : '');
+
+          selectedFilesDiv.querySelectorAll('.rm-file').forEach((btn: any) => {
+            btn.addEventListener('click', () => { selectedFiles.splice(parseInt(btn.dataset.i), 1); renderSelected(); });
+          });
+        }
+
+        document.getElementById('upload-save')!.addEventListener('click', async () => {
+          if (selectedFiles.length === 0) { showToast('Select files to upload', 'warning'); return; }
+          const unsupportedFiles = getUnsupportedFiles(selectedFiles);
+          if (unsupportedFiles.length > 0) {
+            showToast(`Unsupported file extension: ${unsupportedFiles.map((file) => file.name).join(', ')}`, 'error');
+            resetUploadProgress();
+            return;
+          }
+
+          const total = selectedFiles.reduce((a, f) => a + f.size, 0);
+          if (total > 25 * 1024 * 1024) { showToast('Total size exceeds 25 MB', 'error'); resetUploadProgress(); return; }
+
+          const btn = document.getElementById('upload-save') as HTMLButtonElement;
+          btn.disabled = true;
+          btn.textContent = 'Uploading...';
+
+          document.getElementById('upload-progress')!.style.display = 'block';
+          document.getElementById('progress-fill')!.style.width = '50%';
+          document.getElementById('upload-status')!.textContent = `Uploading ${selectedFiles.length} file(s)...`;
+
+          try {
+            await api.uploadFiles(workId, selectedFiles);
+            document.getElementById('progress-fill')!.style.width = '100%';
+            document.getElementById('upload-status')!.textContent = 'Done!';
+            showToast('Files uploaded!', 'success');
+            uploadModal.style.display = 'none';
+            await loadFiles();
+          } catch (err: any) {
+            resetUploadProgress();
+            showToast(err.message, 'error');
+          } finally {
+            btn.disabled = false;
+            btn.textContent = 'Upload';
+          }
+        });
+
+        document.getElementById('btn-download-work')!.addEventListener('click', async () => {
+          try {
+            showToast('Preparing download...', 'info');
+            const blob = await api.downloadWork(workId);
+            downloadBlob(blob, `${work.title}.zip`);
+          } catch (err: any) { showToast(err.message, 'error'); }
+        });
+      });
+    </script>
+
+    <style is:global>
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 80px 0;
+      }
+      .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid var(--color-divider);
+        border-top-color: var(--color-primary);
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+        margin-bottom: var(--space-4);
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      
+      .preview-panel {
+        position: fixed;
+        top: var(--preview-top, 58px);
+        right: 0;
+        bottom: 0;
+        width: 50%;
+        max-width: 700px;
+        background: var(--color-canvas);
+        border-left: 1px solid var(--color-divider);
+        z-index: var(--z-preview-panel);
+        display: flex;
+        flex-direction: column;
+        animation: slideInRight 300ms ease-out;
+        box-shadow: -10px 0 35px rgba(0,0,0,.28);
+      }
+      .preview-panel--fullscreen {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100vh !important;
+        top: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        border-radius: 0 !important;
+        z-index: var(--z-preview-fullscreen) !important;
+      }
+
+      .preview-panel__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--space-4) var(--space-6);
+        border-bottom: 1px solid var(--color-divider);
+        background: #1d1e23;
+        flex-shrink: 0;
+      }
+
+      .preview-panel__content {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0;
+        background: #0d1117; /* Dark background for code preview, matches github-dark */
+      }
+      
+      :root.dark .preview-panel__content {
+        background: #0d1117; /* Same */
+      }
+
+      .preview-code {
+        margin: 0;
+        padding: var(--space-6);
+        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        font-size: 14px;
+        line-height: 1.7;
+        color: #c9d1d9; /* Base github-dark text color */
+        white-space: pre;
+        overflow-x: auto;
+        tab-size: 4;
+        background: transparent !important;
+      }
+      
+      .preview-code code {
+        background: transparent !important;
+      }
+
+      .hljs-ln { width: 100%; border-collapse: collapse; }
+      .hljs-ln td { padding: 0; }
+      .hljs-ln-numbers {
+        user-select: none;
+        text-align: right;
+        color: #484f58;
+        border-right: 1px solid #30363d;
+        vertical-align: top;
+        padding-right: var(--space-4) !important;
+        margin-right: var(--space-4) !important;
+        min-width: 3.5rem;
+      }
+      .hljs-ln-code { padding-left: var(--space-4) !important; }
+
+      .bottom-sheet-handle {
+        width: 100%;
+        padding: var(--space-4) 0 var(--space-2) 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        background: transparent;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 10;
+      }
+      .handle-bar {
+        width: 48px;
+        height: 5px;
+        background: var(--color-divider);
+        border-radius: var(--radius-pill);
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 4px;
+        background: var(--color-divider);
+        border-radius: var(--radius-pill);
+        overflow: hidden;
+      }
+      .progress-bar__fill {
+        height: 100%;
+        background: var(--color-primary);
+        border-radius: var(--radius-pill);
+        transition: width 0.3s ease;
+      }
+
+      .upload-help-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .supported-files-help {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .supported-files-info {
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        border: 1px solid var(--color-divider);
+        background: var(--color-canvas);
+        color: var(--color-muted);
+        font-size: 12px;
+        line-height: 1;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms ease;
+      }
+
+      .supported-files-info:hover,
+      .supported-files-info:focus-visible,
+      .supported-files-help.is-open .supported-files-info {
+        background: var(--color-primary);
+        border-color: var(--color-primary);
+        color: #fff;
+        outline: none;
+      }
+
+      .supported-files-popover {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: 0;
+        z-index: 30;
+        width: min(360px, 70vw);
+        background: var(--color-canvas);
+        border: 1px solid var(--color-divider);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.16);
+        padding: 12px 14px;
+        display: none;
+      }
+
+      .supported-files-help:hover .supported-files-popover,
+      .supported-files-help:focus-within .supported-files-popover,
+      .supported-files-help.is-open .supported-files-popover {
+        display: block;
+      }
+
+      .supported-files-popover__title {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--color-text);
+        margin-bottom: 8px;
+      }
+
+      .supported-files-popover__body {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--color-muted);
+        word-break: break-word;
+      }
+
+      .btn--sm {
+        font-size: 14px;
+        padding: 6px 14px;
+      }
+
+      .text-danger { color: #ff3b30; }
+      .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .py-2 { padding-top: 8px; padding-bottom: 8px; }
+      .px-6 { padding-left: 24px; padding-right: 24px; }
+      .py-4 { padding-top: 17px; padding-bottom: 17px; }
+      .mr-4 { margin-right: 17px; }
+      .border-b { border-bottom: 1px solid var(--color-divider); }
+      .mb-1 { margin-bottom: 4px; }
+      .mb-2 { margin-bottom: 8px; }
+      .mb-4 { margin-bottom: 17px; }
+      .mb-8 { margin-bottom: 32px; }
+      .mt-1 { margin-top: 4px; }
+      .mt-2 { margin-top: 8px; }
+      .mt-4 { margin-top: 17px; }
+      .mt-6 { margin-top: 24px; }
+      .mt-8 { margin-top: 32px; }
+      .min-w-0 { min-width: 0; }
+      .p-1 { padding: 4px 8px; }
+      .rounded { border-radius: 4px; }
+      
+      @keyframes slideInRight {
+        from { transform: translateX(100%); }
+        to { transform: translateX(0); }
+      }
+
+      @media (max-width: 768px) {
+        .preview-panel {
+          width: 100%;
+          max-width: none;
+          top: 114px;
+          height: calc(100dvh - 114px);
+          max-height: none;
+          border-left: none;
+          border-top: 1px solid var(--color-divider);
+          border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+          animation: slideUp 400ms cubic-bezier(0.16, 1, 0.3, 1);
+          box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
+          z-index: 100;
+          overflow: hidden;
+        }
+        .page-header { flex-direction: column; align-items: flex-start !important; gap: var(--space-4); }
+        .preview-panel__header {
+          padding: 15px var(--space-4) 13px;
+          border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+        .bottom-sheet-handle { position: static; flex: 0 0 auto; padding: 8px 0 5px; }
+        .preview-panel__content { min-height: 0; overflow: auto; }
+        .preview-code { padding: 16px; font-size: 13px; line-height: 1.62; }
+
+        /* Mobile file card layout */
+        .store-utility-card .flex.items-center.justify-between {
+          /* Maintain horizontal layout, just allow some squishing */
+          gap: 12px;
+        }
+        .store-utility-card .text-body-strong.truncate {
+          /* Keep truncation to prevent massive vertical bloat */
+        }
+        .preview-panel__header .flex.items-center.gap-3.min-w-0 {
+          min-width: 0;
+          flex: 1;
+          overflow: hidden;
+        }
+        .preview-panel__header #preview-filename {
+          max-width: 120px;
+        }
+      }
+      @keyframes slideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+    </style>
+</Layout>

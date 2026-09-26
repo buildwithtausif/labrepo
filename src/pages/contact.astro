@@ -1,0 +1,113 @@
+---
+import Layout from '../Layouts/Layout.astro';
+---
+
+<Layout title="Contact Us" showNav={true}>
+  <div class="page-content container--narrow">
+    <div class="page-header flex flex-col items-center justify-center text-center mb-12">
+      <h1 class="text-hero mb-4 text-center">Contact Us</h1>
+      <p class="text-lead max-w-xl mx-auto">Have a question, feedback, or need support? Send us a message and we'll get back to you as soon as possible.</p>
+    </div>
+    
+    <div class="max-w-xl mx-auto card--subtle p-8">
+      <form id="contact-form" class="stack gap-6">
+        <div class="stack gap-2">
+          <label for="name" class="text-body-strong">Name</label>
+          <input type="text" id="name" name="name" class="input" required placeholder="Your Name" />
+        </div>
+        
+        <div class="stack gap-2">
+          <label for="email" class="text-body-strong">Email Address</label>
+          <input type="email" id="email" name="email" class="input" required placeholder="you@example.com" />
+        </div>
+        
+        <div class="stack gap-2">
+          <label for="message" class="text-body-strong">Message</label>
+          <textarea id="message" name="message" class="input" required placeholder="How can we help you?" rows="5" style="min-height: 140px; resize: vertical;"></textarea>
+        </div>
+        
+        <button type="submit" class="btn btn--primary mt-2 w-full">
+          <span>Send Message</span>
+        </button>
+      </form>
+
+      <div id="contact-success" class="hidden text-center py-8">
+        <i class="bi bi-check-circle text-primary text-display-lg mb-4 block"></i>
+        <h3 class="text-display-lg mb-2">Message Sent!</h3>
+        <p class="text-muted">Thanks for reaching out. We've received your message and will be in touch shortly.</p>
+        <button type="button" id="contact-reset" class="btn btn--ghost mt-6">Send another message</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const showToast = (window as any).__labrepo_showToast;
+      const form = document.getElementById('contact-form') as HTMLFormElement;
+      const successDiv = document.getElementById('contact-success');
+      const resetBtn = document.getElementById('contact-reset');
+
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const btn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+          const formData = new FormData(form);
+          const data = Object.fromEntries(formData.entries());
+
+          // Basic client-side validation
+          if (!data.name || !data.email || !data.message) {
+            if (showToast) showToast('Please fill out all fields.', 'warning');
+            return;
+          }
+
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(data.email as string)) {
+            if (showToast) showToast('Please enter a valid email address.', 'warning');
+            return;
+          }
+
+          try {
+            if (btn) {
+              btn.disabled = true;
+              btn.innerHTML = '<span class="spinner" style="width: 18px; height: 18px; border-width: 2px; margin-right: 8px; display: inline-block;"></span> Sending...';
+            }
+
+            // Submit to Pageclip
+            const res = await fetch('https://send.pageclip.co/api_wRs3yaUMAHvhyyrfffEMCysvCNAsn0OQ/contact', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/vnd.pageclip.v1+json'
+              },
+              body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+              if (showToast) showToast('Message sent successfully!', 'success');
+              form.classList.add('hidden');
+              if (successDiv) successDiv.classList.remove('hidden');
+              form.reset();
+            } else {
+              throw new Error('Failed to send message');
+            }
+          } catch (err) {
+            console.error(err);
+            if (showToast) showToast('Something went wrong. Please try again.', 'error');
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = '<span>Send Message</span>';
+            }
+          }
+        });
+      }
+
+      if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+          if (successDiv) successDiv.classList.add('hidden');
+          if (form) form.classList.remove('hidden');
+        });
+      }
+    });
+  </script>
+</Layout>

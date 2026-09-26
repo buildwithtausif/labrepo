@@ -1,0 +1,166 @@
+---
+import Layout from '../Layouts/Layout.astro';
+---
+
+<Layout title="Platform Policy" showNav={true}>
+  <main class="policy-page">
+    <div class="container policy-page__container">
+      <section class="policy-hero" aria-labelledby="policy-title">
+        <p class="policy-hero__eyebrow">Rules &amp; Guidelines</p>
+        <h1 id="policy-title" class="policy-hero__title">Platform Policy</h1>
+        <p class="policy-hero__summary">Please read these guidelines carefully. We maintain strict rules to ensure a safe, academic, and respectful environment for all students.</p>
+      </section>
+
+      <section class="policy-grid" aria-label="Policy details">
+        <article class="policy-item">
+          <h2 class="policy-item__title"><i class="bi bi-book mr-2"></i> Academic Integrity</h2>
+          <p class="policy-item__copy">LabRepo is designed to help you organize your own academic work.</p>
+          <ul class="policy-item__list">
+            <li><strong>Your own work:</strong> You must only upload work that you have created or have the rights to store.</li>
+            <li><strong>No plagiarism:</strong> Do not use this platform to distribute copyrighted materials, cheat sheets, or other student's proprietary assignments without permission.</li>
+          </ul>
+        </article>
+
+        <article class="policy-item">
+          <h2 class="policy-item__title"><i class="bi bi-exclamation-octagon mr-2 text-danger"></i> Zero-Tolerance for Obscene &amp; Adult Content</h2>
+          <p class="policy-item__copy">We have a strict <strong>zero-tolerance policy</strong> against the upload or distribution of obscene, explicit, adult, or highly offensive material.</p>
+          <ul class="policy-item__list">
+            <li><strong>Prohibited Material:</strong> This includes, but is not limited to, pornographic images, highly offensive text, and illicit materials.</li>
+            <li><strong>Automated Detection:</strong> While we respect your privacy, reports of such material will result in immediate action.</li>
+            <li><strong>Consequences:</strong> Violations will result in an <strong>immediate account suspension</strong> and potential <strong>hard deletion</strong> of your account and all associated data, without warning.</li>
+          </ul>
+        </article>
+
+        <article class="policy-item">
+          <h2 class="policy-item__title"><i class="bi bi-shield-lock mr-2"></i> Account Security</h2>
+          <p class="policy-item__copy">You are responsible for safeguarding the credentials you use to access the platform.</p>
+          <ul class="policy-item__list">
+            <li><strong>Authentication:</strong> We use Clerk to handle secure logins. Ensure your associated email accounts are secure.</li>
+            <li><strong>Suspicious Activity:</strong> If we detect brute-force attempts on your account, we may temporarily lock it to protect your data.</li>
+          </ul>
+        </article>
+
+        <article class="policy-item">
+          <h2 class="policy-item__title"><i class="bi bi-server mr-2"></i> Fair Usage</h2>
+          <p class="policy-item__copy">Resources are limited and shared among all students.</p>
+          <ul class="policy-item__list">
+            <li><strong>Storage Quotas:</strong> Standard accounts are limited to a predetermined storage quota (default 256MB).</li>
+            <li><strong>Rate Limiting:</strong> Spamming the API with rapid upload requests will result in an automated block (Upload Burst flag).</li>
+          </ul>
+        </article>
+      </section>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .policy-page {
+    padding-block: clamp(36px, 6vw, 72px) clamp(64px, 8vw, 108px);
+  }
+
+  .policy-page__container {
+    width: min(100% - 36px, 1080px);
+  }
+
+  .policy-hero {
+    position: relative;
+    border: 1px solid var(--color-divider);
+    border-radius: 22px;
+    padding: clamp(24px, 4vw, 42px);
+    background:
+      radial-gradient(circle at 8% 10%, rgba(27, 98, 197, 0.15), transparent 45%),
+      linear-gradient(155deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.02));
+    box-shadow: var(--shadow-soft);
+  }
+
+  .policy-hero__eyebrow {
+    color: var(--color-primary-on-dark);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .policy-hero__title {
+    margin-top: 10px;
+    font-size: clamp(2rem, 4.3vw, 3.2rem);
+    letter-spacing: -0.04em;
+    line-height: 1.02;
+  }
+
+  .policy-hero__summary {
+    margin-top: 16px;
+    max-width: 66ch;
+    color: var(--color-ink-muted);
+    font-size: clamp(1rem, 1.4vw, 1.3rem);
+    line-height: 1.62;
+  }
+
+  .policy-grid {
+    display: grid;
+    gap: 14px;
+    margin-top: clamp(18px, 3vw, 28px);
+  }
+
+  .policy-item {
+    border: 1px solid var(--color-divider);
+    border-radius: 18px;
+    padding: clamp(18px, 2.8vw, 28px);
+    background: rgba(255, 255, 255, 0.04);
+    transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+  }
+
+  .policy-item:hover {
+    border-color: rgba(113, 163, 255, 0.42);
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-2px);
+  }
+
+  .policy-item__title {
+    font-size: clamp(1.45rem, 2.7vw, 2.1rem);
+    letter-spacing: -0.028em;
+  }
+
+  .policy-item__copy {
+    margin-top: 12px;
+    max-width: 76ch;
+    color: var(--color-ink-muted);
+    line-height: 1.7;
+    font-size: clamp(1rem, 1.2vw, 1.18rem);
+  }
+
+  .policy-item__list {
+    margin-top: 12px;
+    padding-left: 20px;
+    color: var(--color-ink-muted);
+    line-height: 1.6;
+    font-size: clamp(0.95rem, 1.15vw, 1.1rem);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .policy-item__list li::marker {
+    color: var(--color-primary);
+  }
+
+  @media (max-width: 767px) {
+    .policy-page__container {
+      width: min(100% - 24px, 1080px);
+    }
+
+    .policy-grid {
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .policy-item {
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .policy-item__copy {
+      line-height: 1.62;
+    }
+  }
+</style>
