@@ -1,0 +1,36 @@
+{
+  "name": "labrepo-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=../.env src/index.ts",
+    "build": "tsc",
+    "start": "node --env-file=../.env dist/index.js",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "db:generate": "node --env-file=../.env ./node_modules/drizzle-kit/bin.cjs generate",
+    "db:migrate": "node --env-file=../.env ./node_modules/drizzle-kit/bin.cjs migrate"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1105.0",
+    "@clerk/backend": "^2.5.2",
+    "@fastify/cors": "^11.0.1",
+    "@fastify/multipart": "^9.0.3",
+    "archiver": "^7.0.1",
+    "drizzle-orm": "^0.44.4",
+    "fastify": "^5.2.1",
+    "fastify-plugin": "^6.0.0",
+    "pg": "^8.16.3",
+    "sharp": "^0.35.3",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/archiver": "^6.0.3",
+    "@types/node": "^22.14.1",
+    "@types/pg": "^8.15.5",
+    "@types/sharp": "^0.31.1",
+    "@types/uuid": "^10.0.0",
+    "drizzle-kit": "^0.31.4",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
