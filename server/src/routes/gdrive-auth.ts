@@ -1,33 +1,24 @@
-import type { FastifyInstance } from "fastify";
-import { getDb } from "../db/runtime.js";
-import { users } from "../db/schema.js";
+import { Router } from "express";
+import { getDb } from "../../db/runtime.js";
+import { users } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
-import { createOAuth2Client } from "../storage/resolver.js";
-import { writeAuditLog } from "../services/audit.service.js";
+import { createOAuth2Client } from "../../storage/resolver.js";
+import { writeAuditLog } from "../../services/audit.service.js";
 import { google } from "googleapis";
 
-/**
- * Google Drive OAuth2 routes.
- *
- * Flow:
- * 1. Frontend opens /api/auth/gdrive → redirects to Google consent screen
- * 2. User approves → Google redirects to /api/auth/gdrive/callback
- * 3. Callback exchanges code for tokens, stores refresh_token in DB
- * 4. All subsequent storage calls use that user's token
- */
-export async function gdriveAuthRoutes(
-  fastify: FastifyInstance
-): Promise<void> {
+export function gdriveAuthRoutes() {
+  const router = Router();
+
   /**
    * GET /api/auth/gdrive — Start the OAuth2 consent flow.
    * Redirects the user to Google's consent screen.
    */
-  fastify.get("/api/auth/gdrive", async (request, reply) => {
+  router.get("/api/auth/gdrive", async (req, res) => {
     const oauth2Client = createOAuth2Client();
 
     // Store userId in the state param so we can associate it in the callback
     const state = Buffer.from(
-      JSON.stringify({ userId: request.userId })
+      JSON.stringify({ userId: req.userId })
     ).toString("base64url");
 
     const authUrl = oauth2Client.generateAuthUrl({
@@ -37,28 +28,28 @@ export async function gdriveAuthRoutes(
       state,
     });
 
-    return reply.redirect(authUrl);
+    res.redirect(authUrl);
   });
 
   /**
    * GET /api/auth/gdrive/callback — OAuth2 callback from Google.
    * Exchanges the auth code for tokens, stores the refresh token.
    */
-  fastify.get<{
-    Querystring: { code?: string; state?: string; error?: string };
-  }>("/api/auth/gdrive/callback", async (request, reply) => {
-    const { code, state, error } = request.query;
+  router.get("/api/auth/gdrive/callback", async (req, res) => {
+    const { code, state, error } = req.query as any;
 
     if (error) {
-      return reply.status(400).send({
+      res.status(400).json({
         error: `Google Drive authorization failed: ${error}`,
       });
+      return;
     }
 
     if (!code || !state) {
-      return reply.status(400).send({
+      res.status(400).json({
         error: "Missing authorization code or state parameter",
       });
+      return;
     }
 
     // Decode the state to get the userId
@@ -69,29 +60,30 @@ export async function gdriveAuthRoutes(
       );
       userId = decoded.userId;
     } catch {
-      return reply
-        .status(400)
-        .send({ error: "Invalid state parameter" });
+      res.status(400).json({ error: "Invalid state parameter" });
+      return;
     }
 
     // Exchange the authorization code for tokens
     const oauth2Client = createOAuth2Client();
     let tokens;
     try {
-      const response = await oauth2Client.getToken(code);
+      const response = await oauth2Client.getToken(code as string);
       tokens = response.tokens;
     } catch (err: any) {
       console.error("[gdrive-auth] Token exchange failed:", err);
-      return reply.status(500).send({
+      res.status(500).json({
         error: "Failed to exchange authorization code for tokens",
       });
+      return;
     }
 
     if (!tokens.refresh_token) {
-      return reply.status(400).send({
+      res.status(400).json({
         error:
           "No refresh token received. This can happen if you previously connected. Try revoking LabRepo access in your Google Account settings and reconnecting.",
       });
+      return;
     }
 
     // Get the user's Google email for display
@@ -121,22 +113,20 @@ export async function gdriveAuthRoutes(
       userId,
       action: "gdrive_connected",
       resourceType: "storage",
-      ipAddress: request.ip,
-      userAgent: request.headers["user-agent"],
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
       metadata: { gdriveEmail },
     });
 
     // Redirect to frontend success page (or close the popup)
     const frontendUrl = process.env.PUBLIC_SITE_URL || "http://localhost:4321";
-    return reply.redirect(
-      `${frontendUrl}/dashboard?gdrive=connected`
-    );
+    res.redirect(`${frontendUrl}/dashboard?gdrive=connected`);
   });
 
   /**
    * GET /api/auth/gdrive/status — Check if the current user has connected Drive.
    */
-  fastify.get("/api/auth/gdrive/status", async (request) => {
+  router.get("/api/auth/gdrive/status", async (req, res) => {
     const db = getDb();
     const [user] = await db
       .select({
@@ -144,27 +134,27 @@ export async function gdriveAuthRoutes(
         email: users.gdriveEmail,
       })
       .from(users)
-      .where(eq(users.clerkId, request.userId))
+      .where(eq(users.clerkId, req.userId))
       .limit(1);
 
-    return {
+    res.json({
       connected: !!user?.connected,
       gdriveEmail: user?.email || null,
       connectedAt: user?.connected || null,
-    };
+    });
   });
 
   /**
    * POST /api/auth/gdrive/disconnect — Remove stored tokens.
    */
-  fastify.post("/api/auth/gdrive/disconnect", async (request) => {
+  router.post("/api/auth/gdrive/disconnect", async (req, res) => {
     const db = getDb();
 
     // Optionally revoke the token at Google
     const [user] = await db
       .select({ refreshToken: users.gdriveRefreshToken })
       .from(users)
-      .where(eq(users.clerkId, request.userId))
+      .where(eq(users.clerkId, req.userId))
       .limit(1);
 
     if (user?.refreshToken) {
@@ -184,16 +174,18 @@ export async function gdriveAuthRoutes(
         gdriveEmail: null,
         updatedAt: new Date().toISOString(),
       })
-      .where(eq(users.clerkId, request.userId));
+      .where(eq(users.clerkId, req.userId));
 
     await writeAuditLog({
-      userId: request.userId,
+      userId: req.userId,
       action: "gdrive_disconnected",
       resourceType: "storage",
-      ipAddress: request.ip,
-      userAgent: request.headers["user-agent"],
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
     });
 
-    return { success: true, message: "Google Drive disconnected" };
+    res.json({ success: true, message: "Google Drive disconnected" });
   });
+
+  return router;
 }

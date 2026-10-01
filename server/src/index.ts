@@ -1,29 +1,15 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import multipart from '@fastify/multipart';
+import express from 'express';
+import cors from 'cors';
 import { initDatabase, closeDatabase } from './db/runtime.js';
-import { clerkAuth } from './auth/clerk.js';
-import { MockS3Adapter } from './storage/mock-s3.js';
-import { userRoutes } from './routes/user.js';
-import { sessionRoutes } from './routes/sessions.js';
-import { subjectRoutes } from './routes/subjects.js';
-import { workRoutes } from './routes/works.js';
-import { createFileRoutes } from './routes/files.js';
-import { createDownloadRoutes } from './routes/download.js';
-import { createRecycleBinRoutes } from './routes/recycle-bin.js';
-import { searchRoutes } from './routes/search.js';
-import { publicRoutes } from './routes/public.js';
 import { startCleanupJob } from './jobs/cleanup.js';
 import { getSecurityConfig } from './services/config.service.js';
-import type { StorageAdapter } from './storage/adapter.js';
-import { requireGDriveAdapter, getGDriveAdapterForUser } from './storage/resolver.js';
-import { gdriveAuthRoutes } from './routes/gdrive-auth.js';
 
+const app = express();
 const PORT = parseInt(process.env.API_PORT || '3001', 10);
 const HOST = process.env.API_HOST || '0.0.0.0';
 const securityConfig = getSecurityConfig();
 
-// Determine CORS origins from environment or defaults
+// Determine CORS origins
 function getCorsOrigins(): string[] {
   const envOrigins = process.env.CORS_ORIGINS;
   if (envOrigins) {
@@ -37,145 +23,72 @@ function getCorsOrigins(): string[] {
   ];
 }
 
-/**
- * Resolve the storage adapter for a given request.
- *
- * For gdrive mode: creates a per-user adapter from their stored OAuth tokens.
- * For mock/s3 mode: returns the shared global adapter.
- */
-async function resolveStorage(
-  storageDriver: string,
-  fallbackStorage: StorageAdapter,
-  userId: string
-): Promise<StorageAdapter> {
-  if (storageDriver === 'gdrive') {
-    return requireGDriveAdapter(userId);
+app.use(cors({
+  origin: getCorsOrigins(),
+  credentials: true,
+}));
+
+// Custom JSON parser to safely handle empty bodies
+app.use(express.json({ strict: false }));
+app.use((req, res, next) => {
+  if (req.body === '' || req.body === undefined) {
+    req.body = {};
   }
-  return fallbackStorage;
-}
+  next();
+});
+
+// Health check (no auth required)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+import { clerkAuthMiddleware } from './auth/clerk.js';
+
+import { publicRoutes } from './routes/public.js';
+import { userRoutes } from './routes/user.js';
+import { searchRoutes } from './routes/search.js';
+import { sessionRoutes } from './routes/sessions.js';
+import { subjectRoutes } from './routes/subjects.js';
+import { workRoutes } from './routes/works.js';
+import { createFileRoutes } from './routes/files.js';
+import { createDownloadRoutes } from './routes/download.js';
+import { createRecycleBinRoutes } from './routes/recycle-bin.js';
+import { createAdminRoutes } from './routes/admin.js';
+import { gdriveAuthRoutes } from './routes/gdrive-auth.js';
+
+import { resolveStorage } from './storage/resolver.js';
+import { createMockStorage } from './storage/mock.js';
+
+const fallbackStorage = createMockStorage('public');
+
+app.use(publicRoutes);
+
+// Apply auth middleware to all subsequent routes
+app.use(clerkAuthMiddleware);
+
+app.use(userRoutes);
+app.use(searchRoutes);
+app.use(sessionRoutes);
+app.use(subjectRoutes);
+app.use(workRoutes);
+app.use(createFileRoutes(resolveStorage));
+app.use(createDownloadRoutes(resolveStorage));
+app.use(createRecycleBinRoutes(resolveStorage));
+app.use(createAdminRoutes(resolveStorage, fallbackStorage));
+app.use(gdriveAuthRoutes());
 
 async function start() {
-  // Initialize database (runs migrations — blocks if they fail)
   await initDatabase();
-  console.log('[server] Database initialized (PostgreSQL + Drizzle ORM)');
+  console.log('[server] Database initialized');
 
-  // Initialize fallback storage adapter (mock/s3 — used for non-gdrive modes and admin assets)
-  const storageDriver = process.env.STORAGE_DRIVER || 'mock';
-  let fallbackStorage: StorageAdapter;
-
-  if (storageDriver === 'minio' || storageDriver === 's3') {
-    const { S3Adapter } = await import('./storage/s3.js');
-    const s3Adapter = new S3Adapter();
-    await s3Adapter.initBucket();
-    fallbackStorage = s3Adapter;
-    console.log(`[server] Storage adapter initialized (${storageDriver === 'minio' ? 'MinIO' : 'AWS S3'})`);
-  } else {
-    fallbackStorage = new MockS3Adapter();
-    console.log(`[server] Storage adapter initialized (${storageDriver === 'gdrive' ? 'MockS3 fallback — GDrive is per-user' : 'MockS3'})`);
-  }
-
-  // Create Fastify instance
-  const fastify = Fastify({
-    logger: true,
-  });
-
-  // Custom JSON parser to safely handle empty bodies
-  fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
-    try {
-      if (!body || (body as string).trim() === '') {
-        done(null, {});
-      } else {
-        done(null, JSON.parse(body as string));
-      }
-    } catch (err: any) {
-      err.statusCode = 400;
-      done(err, undefined);
-    }
-  });
-
-  // Register CORS
-  await fastify.register(cors, {
-    origin: getCorsOrigins(),
-    credentials: true,
-  });
-
-  // Register multipart support (for file uploads)
-  await fastify.register(multipart, {
-    limits: {
-      fileSize: securityConfig.maxUploadBytes,
-      files: 20,
-    },
-  });
-
-  // Health check (no auth required)
-  fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
-
-  // Public proxy for storage (admin-owned assets like OG images — uses fallback storage)
-  fastify.get<{ Params: { '*': string } }>('/api/public/storage/*', async (request, reply) => {
-    const key = request.params['*'];
-    if (!key || key.includes('..')) {
-      return reply.status(400).send({ error: 'Invalid path' });
-    }
-    try {
-      const { data, contentType } = await fallbackStorage.download(key);
-      return reply.header('Content-Type', contentType).send(data);
-    } catch (err) {
-      return reply.status(404).send({ error: 'Not found' });
-    }
-  });
-
-  // Public announcements API (no auth required)
-  await fastify.register(publicRoutes);
-
-  // Register auth plugin (all routes below require authentication)
-  await fastify.register(clerkAuth);
-
-  // Google Drive OAuth2 connect/disconnect routes
-  await fastify.register(gdriveAuthRoutes);
-
-  // Register routes
-  await fastify.register(userRoutes);
-  await fastify.register(sessionRoutes);
-  await fastify.register(subjectRoutes);
-  await fastify.register(workRoutes);
-
-  // Storage-dependent routes: pass a resolver function instead of a fixed adapter
-  const storageResolver = (userId: string) =>
-    resolveStorage(storageDriver, fallbackStorage, userId);
-
-  await fastify.register(createFileRoutes(storageResolver));
-  await fastify.register(createDownloadRoutes(storageResolver));
-  await fastify.register(createRecycleBinRoutes(storageResolver));
+  startCleanupJob();
   
-
-  await fastify.register(searchRoutes);
-  
-  const { createAdminRoutes } = await import('./routes/admin.js');
-  await fastify.register(createAdminRoutes(storageResolver, fallbackStorage));
-
-  // Start cleanup job (uses per-user resolution internally)
-  startCleanupJob(storageDriver, fallbackStorage);
-  console.log('[server] Cleanup job started');
-
-  // Graceful shutdown
-  const shutdown = async () => {
-    console.log('[server] Shutting down...');
-    await fastify.close();
-    await closeDatabase();
-    process.exit(0);
-  };
-
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
-
-  // Start server
-  try {
-    await fastify.listen({ port: PORT, host: HOST });
-    console.log(`[server] LabRepo API running at http://${HOST}:${PORT}`);
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
+  app.listen(PORT, HOST, () => {
+    console.log(`[server] LabRepo Express API running at http://${HOST}:${PORT}`);
+  });
 }
 
-start();
+start().catch((err) => {
+  console.error('[server] Failed to start:', err);
+  process.exit(1);
+});

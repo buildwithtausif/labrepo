@@ -1,12 +1,13 @@
-import type { FastifyInstance } from 'fastify';
-import type { StorageAdapter } from '../storage/adapter.js';
-import type { StorageResolverFn } from './files.js';
-import { getDb } from '../db/runtime.js';
-import { users, abuseFlags, auditLogs, userUsageStats, academicSessions, siteSettings, files, works, subjects, recycleBin, dailyUsageHistory, announcements } from '../db/schema.js';
-import { writeAuditLog } from '../services/audit.service.js';
+import { Router } from 'express';
+import type { StorageAdapter } from '../../storage/adapter.js';
+import type { StorageResolverFn } from '../files.js';
+import { getDb } from '../../db/runtime.js';
+import { users, abuseFlags, auditLogs, userUsageStats, academicSessions, siteSettings, files, works, subjects, recycleBin, dailyUsageHistory, announcements } from '../../db/schema.js';
+import { writeAuditLog } from '../../services/audit.service.js';
 import { eq, sql, count, sum, desc } from 'drizzle-orm';
-import { clerkClient } from '../auth/clerk.js';
+import { clerkClient } from '../../auth/clerk.js';
 import sharp from 'sharp';
+import { upload } from '../../middlewares/upload.js';
 
 async function isAdminUser(userId: string): Promise<boolean> {
   if (userId === process.env.ADMIN_USER_ID || userId === process.env.CLERK_ADMIN_USER_ID) return true;
@@ -20,16 +21,20 @@ async function isAdminUser(userId: string): Promise<boolean> {
 }
 
 export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackStorage: StorageAdapter) {
-  return async function adminRoutes(fastify: FastifyInstance): Promise<void> {
-    fastify.addHook('preHandler', async (request, reply) => {
-      const isAdmin = await isAdminUser(request.userId);
-      if (!isAdmin) {
-        return reply.status(403).send({ error: 'Admin access required' });
-      }
-    });
+  const router = Router();
+
+  // Middleware to enforce admin access
+  router.use(async (req, res, next) => {
+    const isAdmin = await isAdminUser(req.userId);
+    if (!isAdmin) {
+      res.status(403).json({ error: 'Admin access required' });
+      return;
+    }
+    next();
+  });
 
   // Summary stats
-  fastify.get('/api/admin/summary', async () => {
+  router.get('/api/admin/summary', async (req, res) => {
     const db = getDb();
 
     const [userCount] = await db.select({ count: count() }).from(users);
@@ -71,7 +76,7 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
       })
       .from(dailyUsageHistory);
 
-    return {
+    res.json({
       users: userCount?.count ?? 0,
       openFlags: flagCount?.count ?? 0,
       auditLogCount: logCount?.count ?? 0,
@@ -81,11 +86,11 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
       lifetimeUsers: Number(lifetime?.total_users_ever ?? 0),
       lifetimeUploads: Number(lifetime?.lifetime_uploads ?? 0),
       lifetimeDownloads: Number(lifetime?.lifetime_downloads ?? 0),
-    };
+    });
   });
 
   // List all users with usage stats
-  fastify.get('/api/admin/users', async () => {
+  router.get('/api/admin/users', async (req, res) => {
     const db = getDb();
     const result = await db
       .select({
@@ -109,11 +114,11 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
       .leftJoin(userUsageStats, eq(userUsageStats.userId, users.clerkId))
       .orderBy(sql`${users.createdAt} DESC`);
 
-    return { users: result };
+    res.json({ users: result });
   });
 
   // Audit logs
-  fastify.get('/api/admin/audit-logs', async () => {
+  router.get('/api/admin/audit-logs', async (req, res) => {
     const db = getDb();
     const logs = await db
       .select()
@@ -121,11 +126,11 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
       .orderBy(sql`${auditLogs.createdAt} DESC`)
       .limit(50);
 
-    return { logs };
+    res.json({ logs });
   });
 
   // Abuse flags
-  fastify.get('/api/admin/abuse-flags', async () => {
+  router.get('/api/admin/abuse-flags', async (req, res) => {
     const db = getDb();
     const flags = await db
       .select()
@@ -133,49 +138,50 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
       .orderBy(sql`${abuseFlags.createdAt} DESC`)
       .limit(50);
 
-    return { flags };
+    res.json({ flags });
   });
 
   // Resolve a flag
-  fastify.post<{ Params: { id: string }; Body: { notes?: string } }>('/api/admin/flags/:id/resolve', async (request, reply) => {
+  router.post('/api/admin/flags/:id/resolve', async (req, res) => {
     const db = getDb();
     const [flag] = await db
       .select()
       .from(abuseFlags)
-      .where(eq(abuseFlags.id, Number(request.params.id)))
+      .where(eq(abuseFlags.id, Number(req.params.id)))
       .limit(1);
 
     if (!flag) {
-      return reply.status(404).send({ error: 'Flag not found' });
+      res.status(404).json({ error: 'Flag not found' });
+      return;
     }
 
     await db
       .update(abuseFlags)
       .set({
         resolved: 1,
-        resolvedBy: request.userId,
-        notes: (request.body as any)?.notes ?? flag.notes,
+        resolvedBy: req.userId,
+        notes: req.body?.notes ?? flag.notes,
       })
-      .where(eq(abuseFlags.id, Number(request.params.id)));
+      .where(eq(abuseFlags.id, Number(req.params.id)));
 
     await writeAuditLog({
-      userId: request.userId,
+      userId: req.userId,
       action: 'admin_resolved_flag',
       resourceType: 'abuse_flag',
-      resourceId: request.params.id,
-      ipAddress: request.ip,
-      userAgent: request.headers['user-agent'],
-      metadata: { flagId: request.params.id },
+      resourceId: req.params.id,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      metadata: { flagId: req.params.id },
     });
 
-    return { success: true };
+    res.json({ success: true });
   });
 
   // Suspend uploads for a user
-  fastify.post<{ Params: { userId: string }; Body: { notes?: string } }>('/api/admin/users/:userId/suspend-uploads', async (request) => {
+  router.post('/api/admin/users/:userId/suspend-uploads', async (req, res) => {
     const db = getDb();
-    const userId = request.params.userId;
-    const notes = (request.body as any)?.notes ?? 'Uploads suspended by admin';
+    const userId = req.params.userId;
+    const notes = req.body?.notes ?? 'Uploads suspended by admin';
 
     await db
       .update(users)
@@ -187,23 +193,23 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
       .where(eq(users.clerkId, userId));
 
     await writeAuditLog({
-      userId: request.userId,
+      userId: req.userId,
       action: 'admin_suspended_uploads',
       resourceType: 'user',
       resourceId: userId,
-      ipAddress: request.ip,
-      userAgent: request.headers['user-agent'],
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
       metadata: { notes },
     });
 
-    return { success: true, userId, action: 'uploads_suspended' };
+    res.json({ success: true, userId, action: 'uploads_suspended' });
   });
 
   // Restore a user (unsuspend uploads)
-  fastify.post<{ Params: { userId: string }; Body: { notes?: string } }>('/api/admin/users/:userId/restore', async (request) => {
+  router.post('/api/admin/users/:userId/restore', async (req, res) => {
     const db = getDb();
-    const userId = request.params.userId;
-    const notes = (request.body as any)?.notes ?? 'Account restored by admin';
+    const userId = req.params.userId;
+    const notes = req.body?.notes ?? 'Account restored by admin';
 
     await db
       .update(users)
@@ -215,23 +221,23 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
       .where(eq(users.clerkId, userId));
 
     await writeAuditLog({
-      userId: request.userId,
+      userId: req.userId,
       action: 'admin_restored_user',
       resourceType: 'user',
       resourceId: userId,
-      ipAddress: request.ip,
-      userAgent: request.headers['user-agent'],
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
       metadata: { notes },
     });
 
-    return { success: true, userId, action: 'account_restored' };
+    res.json({ success: true, userId, action: 'account_restored' });
   });
 
   // Manage user-specific file extensions
-  fastify.post<{ Params: { userId: string }; Body: { extensions?: string } }>('/api/admin/users/:userId/extensions', async (request, reply) => {
+  router.post('/api/admin/users/:userId/extensions', async (req, res) => {
     const db = getDb();
-    const userId = request.params.userId;
-    const extensions = request.body.extensions || null;
+    const userId = req.params.userId;
+    const extensions = req.body.extensions || null;
 
     await db
       .update(users)
@@ -242,22 +248,22 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
       .where(eq(users.clerkId, userId));
 
     await writeAuditLog({
-      userId: request.userId,
+      userId: req.userId,
       action: 'admin_updated_user_extensions',
       resourceType: 'user',
       resourceId: userId,
-      ipAddress: request.ip,
-      userAgent: request.headers['user-agent'],
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
       metadata: { extensions },
     });
 
-    return { success: true, userId, action: 'extensions_updated' };
+    res.json({ success: true, userId, action: 'extensions_updated' });
   });
 
   // Hard delete a user
-  fastify.delete<{ Params: { userId: string } }>('/api/admin/users/:userId/hard-delete', async (request, reply) => {
+  router.delete('/api/admin/users/:userId/hard-delete', async (req, res) => {
     const db = getDb();
-    const userId = request.params.userId;
+    const userId = req.params.userId;
 
     // 1. Fetch all files for physical deletion
     const userFiles = await db.select({ storageKey: files.storageKey }).from(files).where(eq(files.userId, userId));
@@ -286,269 +292,261 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
     });
 
     await writeAuditLog({
-      userId: request.userId,
+      userId: req.userId,
       action: 'admin_hard_deleted_user',
       resourceType: 'user',
       resourceId: userId,
-      ipAddress: request.ip,
-      userAgent: request.headers['user-agent'],
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
       metadata: {},
     });
 
-    return { success: true, userId, action: 'hard_deleted' };
+    res.json({ success: true, userId, action: 'hard_deleted' });
   });
 
-    // Storage health and stats
-    fastify.get('/api/admin/storage', async () => {
-      const db = getDb();
-      
-      // DB-level stats
-      const [usage] = await db
-        .select({
-          total_files: sum(userUsageStats.fileCount),
-          storage_used: sum(userUsageStats.storageUsed),
-        })
-        .from(userUsageStats);
+  // Storage health and stats
+  router.get('/api/admin/storage', async (req, res) => {
+    const db = getDb();
+    
+    // DB-level stats
+    const [usage] = await db
+      .select({
+        total_files: sum(userUsageStats.fileCount),
+        storage_used: sum(userUsageStats.storageUsed),
+      })
+      .from(userUsageStats);
 
-      const stats = {
-        totalFiles: Number(usage?.total_files ?? 0),
-        storageUsed: Number(usage?.storage_used ?? 0),
-        driver: process.env.STORAGE_DRIVER || 'mock',
-      };
+    const stats = {
+      totalFiles: Number(usage?.total_files ?? 0),
+      storageUsed: Number(usage?.storage_used ?? 0),
+      driver: process.env.STORAGE_DRIVER || 'mock',
+    };
 
-      // Check storage health using a non-intrusive method if possible
-      // Note: We avoid listing all files for privacy. We just return DB stats.
-      return { stats };
-    });
+    res.json({ stats });
+  });
 
-    // Global Config Management (File Types)
-    fastify.get('/api/admin/config', async () => {
-      const db = getDb();
-      const settings = await db.select().from(siteSettings).where(sql`${siteSettings.key} LIKE 'config.%'`);
-      const config: Record<string, string> = {};
-      for (const s of settings) {
-        config[s.key.replace('config.', '')] = s.value;
-      }
-      return { config };
-    });
+  // Global Config Management (File Types)
+  router.get('/api/admin/config', async (req, res) => {
+    const db = getDb();
+    const settings = await db.select().from(siteSettings).where(sql`${siteSettings.key} LIKE 'config.%'`);
+    const config: Record<string, string> = {};
+    for (const s of settings) {
+      config[s.key.replace('config.', '')] = s.value;
+    }
+    res.json({ config });
+  });
 
-    fastify.post('/api/admin/config', async (request, reply) => {
-      const db = getDb();
-      const data = request.body as Record<string, string>;
-      
-      await db.transaction(async (tx) => {
-        for (const [key, value] of Object.entries(data)) {
-          if (!key || typeof value !== 'string') continue;
-          const fullKey = `config.${key}`;
-          
-          const [existing] = await tx.select().from(siteSettings).where(eq(siteSettings.key, fullKey)).limit(1);
-          if (existing) {
-            await tx.update(siteSettings).set({ value, updatedAt: new Date().toISOString() }).where(eq(siteSettings.key, fullKey));
-          } else {
-            await tx.insert(siteSettings).values({ key: fullKey, value, updatedAt: new Date().toISOString() });
-          }
+  router.post('/api/admin/config', async (req, res) => {
+    const db = getDb();
+    const data = req.body as Record<string, string>;
+    
+    await db.transaction(async (tx) => {
+      for (const [key, value] of Object.entries(data)) {
+        if (!key || typeof value !== 'string') continue;
+        const fullKey = `config.${key}`;
+        
+        const [existing] = await tx.select().from(siteSettings).where(eq(siteSettings.key, fullKey)).limit(1);
+        if (existing) {
+          await tx.update(siteSettings).set({ value, updatedAt: new Date().toISOString() }).where(eq(siteSettings.key, fullKey));
+        } else {
+          await tx.insert(siteSettings).values({ key: fullKey, value, updatedAt: new Date().toISOString() });
         }
-      });
-
-      await writeAuditLog({
-        userId: request.userId,
-        action: 'admin_updated_config',
-        resourceType: 'site_settings',
-        resourceId: 'config',
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
-
-      return { success: true };
-    });
-
-    // SEO Settings Management
-    fastify.get('/api/admin/seo', async () => {
-      const db = getDb();
-      const settings = await db.select().from(siteSettings).where(sql`${siteSettings.key} LIKE 'seo.%'`);
-      const seo: Record<string, string> = {};
-      for (const s of settings) {
-        seo[s.key.replace('seo.', '')] = s.value;
       }
-      return { seo };
     });
 
-    fastify.post('/api/admin/seo', async (request, reply) => {
-      const db = getDb();
-      const data = request.body as Record<string, string>;
-      
-      await db.transaction(async (tx) => {
-        for (const [key, value] of Object.entries(data)) {
-          if (!key || typeof value !== 'string') continue;
-          const fullKey = `seo.${key}`;
-          
-          // Upsert setting
-          const [existing] = await tx.select().from(siteSettings).where(eq(siteSettings.key, fullKey)).limit(1);
-          if (existing) {
-            await tx.update(siteSettings).set({ value, updatedAt: new Date().toISOString() }).where(eq(siteSettings.key, fullKey));
-          } else {
-            await tx.insert(siteSettings).values({ key: fullKey, value, updatedAt: new Date().toISOString() });
-          }
+    await writeAuditLog({
+      userId: req.userId,
+      action: 'admin_updated_config',
+      resourceType: 'site_settings',
+      resourceId: 'config',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    res.json({ success: true });
+  });
+
+  // SEO Settings Management
+  router.get('/api/admin/seo', async (req, res) => {
+    const db = getDb();
+    const settings = await db.select().from(siteSettings).where(sql`${siteSettings.key} LIKE 'seo.%'`);
+    const seo: Record<string, string> = {};
+    for (const s of settings) {
+      seo[s.key.replace('seo.', '')] = s.value;
+    }
+    res.json({ seo });
+  });
+
+  router.post('/api/admin/seo', async (req, res) => {
+    const db = getDb();
+    const data = req.body as Record<string, string>;
+    
+    await db.transaction(async (tx) => {
+      for (const [key, value] of Object.entries(data)) {
+        if (!key || typeof value !== 'string') continue;
+        const fullKey = `seo.${key}`;
+        
+        // Upsert setting
+        const [existing] = await tx.select().from(siteSettings).where(eq(siteSettings.key, fullKey)).limit(1);
+        if (existing) {
+          await tx.update(siteSettings).set({ value, updatedAt: new Date().toISOString() }).where(eq(siteSettings.key, fullKey));
+        } else {
+          await tx.insert(siteSettings).values({ key: fullKey, value, updatedAt: new Date().toISOString() });
         }
-      });
-
-      await writeAuditLog({
-        userId: request.userId,
-        action: 'admin_updated_seo',
-        resourceType: 'site_settings',
-        resourceId: 'seo',
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
-
-      return { success: true };
+      }
     });
 
-    // Since OG Image is requested as upload, we would handle it via multipart
-    fastify.post('/api/admin/seo/og-image', async (request, reply) => {
-      const parts = request.parts();
-      let ogImageUrl = '';
+    await writeAuditLog({
+      userId: req.userId,
+      action: 'admin_updated_seo',
+      resourceType: 'site_settings',
+      resourceId: 'seo',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    res.json({ success: true });
+  });
+
+  // OG Image Upload
+  router.post('/api/admin/seo/og-image', upload.single('image'), async (req, res) => {
+    let ogImageUrl = '';
+    
+    if (req.file) {
+      const data = req.file.buffer;
       
-      for await (const part of parts) {
-        if (part.type === 'file' && part.fieldname === 'image') {
-          const chunks: Buffer[] = [];
-          for await (const chunk of part.file) {
-            chunks.push(chunk);
-          }
-          const data = Buffer.concat(chunks);
-          
-          // Process with sharp — convert ANY image format to optimized WebP
-          let processedData: Buffer;
-          let mimetype: string;
-          let extension: string;
+      // Process with sharp — convert ANY image format to optimized WebP
+      let processedData: Buffer;
+      let mimetype: string;
+      let extension: string;
 
-          try {
-            processedData = await sharp(data)
-              .resize(1200, 630, { fit: 'inside', withoutEnlargement: true })
-              .jpeg({ quality: 80 })
-              .toBuffer();
-            
-            mimetype = 'image/jpeg';
-            extension = 'jpg';
-            console.log(`Sharp: compressed OG image from ${data.length} to ${processedData.length} bytes (${Math.round((1 - processedData.length / data.length) * 100)}% reduction)`);
-          } catch (err: any) {
-            console.error('Sharp processing failed:', err?.message || err);
-            reply.code(400);
-            return { success: false, error: 'Image processing failed: ' + (err?.message || 'Unknown error') };
-          }
-          
-          if (fallbackStorage) {
-            const db = getDb();
-            const fullKey = 'seo.image';
+      try {
+        processedData = await sharp(data)
+          .resize(1200, 630, { fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+        
+        mimetype = 'image/jpeg';
+        extension = 'jpg';
+        console.log(`Sharp: compressed OG image from ${data.length} to ${processedData.length} bytes (${Math.round((1 - processedData.length / data.length) * 100)}% reduction)`);
+      } catch (err: any) {
+        console.error('Sharp processing failed:', err?.message || err);
+        res.status(400).json({ success: false, error: 'Image processing failed: ' + (err?.message || 'Unknown error') });
+        return;
+      }
+      
+      if (fallbackStorage) {
+        const db = getDb();
+        const fullKey = 'seo.image';
 
-            // Delete the OLD OG image from storage before uploading the new one
-            try {
-              const [existing] = await db.select().from(siteSettings).where(eq(siteSettings.key, fullKey)).limit(1);
-              if (existing?.value) {
-                // Extract the storage key from the URL: "/api/public/storage/public/seo/og-image-xxx.webp" -> "public/seo/og-image-xxx.webp"
-                const oldKey = existing.value.replace('/api/public/storage/', '');
-                if (oldKey && oldKey.startsWith('public/seo/')) {
-                  await fallbackStorage.delete(oldKey);
-                  console.log(`Deleted old OG image: ${oldKey}`);
-                }
-              }
-            } catch (delErr: any) {
-              console.warn('Failed to delete old OG image (non-fatal):', delErr?.message || delErr);
-            }
-
-            // Upload the new image
-            const key = `public/seo/og-image-${Date.now()}.${extension}`;
-            await fallbackStorage.upload(key, processedData, mimetype);
-            ogImageUrl = `/api/public/storage/${key}`;
-            
-            // Upsert the setting
-            const [existingRow] = await db.select().from(siteSettings).where(eq(siteSettings.key, fullKey)).limit(1);
-            if (existingRow) {
-              await db.update(siteSettings).set({ value: ogImageUrl, updatedAt: new Date().toISOString() }).where(eq(siteSettings.key, fullKey));
-            } else {
-              await db.insert(siteSettings).values({ key: fullKey, value: ogImageUrl, updatedAt: new Date().toISOString() });
+        // Delete the OLD OG image from storage before uploading the new one
+        try {
+          const [existing] = await db.select().from(siteSettings).where(eq(siteSettings.key, fullKey)).limit(1);
+          if (existing?.value) {
+            // Extract the storage key from the URL: "/api/public/storage/public/seo/og-image-xxx.webp" -> "public/seo/og-image-xxx.webp"
+            const oldKey = existing.value.replace('/api/public/storage/', '');
+            if (oldKey && oldKey.startsWith('public/seo/')) {
+              await fallbackStorage.delete(oldKey);
+              console.log(`Deleted old OG image: ${oldKey}`);
             }
           }
+        } catch (delErr: any) {
+          console.warn('Failed to delete old OG image (non-fatal):', delErr?.message || delErr);
+        }
+
+        // Upload the new image
+        const key = `public/seo/og-image-${Date.now()}.${extension}`;
+        await fallbackStorage.upload(key, processedData, mimetype);
+        ogImageUrl = `/api/public/storage/${key}`;
+        
+        // Upsert the setting
+        const [existingRow] = await db.select().from(siteSettings).where(eq(siteSettings.key, fullKey)).limit(1);
+        if (existingRow) {
+          await db.update(siteSettings).set({ value: ogImageUrl, updatedAt: new Date().toISOString() }).where(eq(siteSettings.key, fullKey));
+        } else {
+          await db.insert(siteSettings).values({ key: fullKey, value: ogImageUrl, updatedAt: new Date().toISOString() });
         }
       }
-      
-      return { success: true, url: ogImageUrl };
-    });
-    // Announcements CRUD
-    fastify.get('/api/admin/announcements', async () => {
-      const db = getDb();
-      const list = await db.select().from(announcements).orderBy(desc(announcements.createdAt));
-      return { announcements: list };
-    });
+    }
+    
+    res.json({ success: true, url: ogImageUrl });
+  });
 
-    fastify.post('/api/admin/announcements', async (request, reply) => {
-      const db = getDb();
-      const body = request.body as any;
-      const [record] = await db.insert(announcements).values({
-        title: body.title,
-        message: body.message,
-        url: body.url || null,
-        urlLabel: body.urlLabel || null,
-        type: body.type || 'info',
-        isActive: body.isActive !== undefined ? body.isActive : 1,
-        startsAt: body.startsAt || null,
-        expiresAt: body.expiresAt || null,
-        createdBy: request.userId,
-      }).returning();
-      
-      await writeAuditLog({
-        userId: request.userId,
-        action: 'admin_created_announcement',
-        resourceType: 'announcement',
-        resourceId: record.id.toString(),
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
-      return { success: true, announcement: record };
+  // Announcements CRUD
+  router.get('/api/admin/announcements', async (req, res) => {
+    const db = getDb();
+    const list = await db.select().from(announcements).orderBy(desc(announcements.createdAt));
+    res.json({ announcements: list });
+  });
+
+  router.post('/api/admin/announcements', async (req, res) => {
+    const db = getDb();
+    const body = req.body as any;
+    const [record] = await db.insert(announcements).values({
+      title: body.title,
+      message: body.message,
+      url: body.url || null,
+      urlLabel: body.urlLabel || null,
+      type: body.type || 'info',
+      isActive: body.isActive !== undefined ? body.isActive : 1,
+      startsAt: body.startsAt || null,
+      expiresAt: body.expiresAt || null,
+      createdBy: req.userId,
+    }).returning();
+    
+    await writeAuditLog({
+      userId: req.userId,
+      action: 'admin_created_announcement',
+      resourceType: 'announcement',
+      resourceId: record.id.toString(),
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
     });
+    res.json({ success: true, announcement: record });
+  });
 
-    fastify.put('/api/admin/announcements/:id', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const body = request.body as any;
-      const db = getDb();
-      const [record] = await db.update(announcements).set({
-        title: body.title,
-        message: body.message,
-        url: body.url || null,
-        urlLabel: body.urlLabel || null,
-        type: body.type,
-        isActive: body.isActive,
-        startsAt: body.startsAt || null,
-        expiresAt: body.expiresAt || null,
-        updatedAt: new Date().toISOString()
-      }).where(eq(announcements.id, parseInt(id))).returning();
+  router.put('/api/admin/announcements/:id', async (req, res) => {
+    const { id } = req.params;
+    const body = req.body as any;
+    const db = getDb();
+    const [record] = await db.update(announcements).set({
+      title: body.title,
+      message: body.message,
+      url: body.url || null,
+      urlLabel: body.urlLabel || null,
+      type: body.type,
+      isActive: body.isActive,
+      startsAt: body.startsAt || null,
+      expiresAt: body.expiresAt || null,
+      updatedAt: new Date().toISOString()
+    }).where(eq(announcements.id, parseInt(id))).returning();
 
-      await writeAuditLog({
-        userId: request.userId,
-        action: 'admin_updated_announcement',
-        resourceType: 'announcement',
-        resourceId: id,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
-      return { success: true, announcement: record };
+    await writeAuditLog({
+      userId: req.userId,
+      action: 'admin_updated_announcement',
+      resourceType: 'announcement',
+      resourceId: id,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
     });
+    res.json({ success: true, announcement: record });
+  });
 
-    fastify.delete('/api/admin/announcements/:id', async (request, reply) => {
-      const { id } = request.params as { id: string };
-      const db = getDb();
-      await db.delete(announcements).where(eq(announcements.id, parseInt(id)));
-      
-      await writeAuditLog({
-        userId: request.userId,
-        action: 'admin_deleted_announcement',
-        resourceType: 'announcement',
-        resourceId: id,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'],
-      });
-      return { success: true };
+  router.delete('/api/admin/announcements/:id', async (req, res) => {
+    const { id } = req.params;
+    const db = getDb();
+    await db.delete(announcements).where(eq(announcements.id, parseInt(id)));
+    
+    await writeAuditLog({
+      userId: req.userId,
+      action: 'admin_deleted_announcement',
+      resourceType: 'announcement',
+      resourceId: id,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
     });
+    res.json({ success: true });
+  });
 
-  };
+  return router;
 }
