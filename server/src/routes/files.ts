@@ -1,7 +1,6 @@
-import type { FastifyInstance } from 'fastify';
+import { Router } from 'express';
 import { getDb } from '../db/runtime.js';
 import { files, works, subjects, academicSessions, recycleBin } from '../db/schema.js';
-import type { StorageAdapter } from '../storage/adapter.js';
 import { buildStorageKey } from '../storage/adapter.js';
 import { validateUploadCandidate } from '../services/validation.service.js';
 import { writeAuditLog } from '../services/audit.service.js';
@@ -10,8 +9,11 @@ import { evaluateAbuseSignals } from '../services/moderation.service.js';
 import { getSecurityConfig, getDynamicSecurityConfig } from '../services/config.service.js';
 import { rateLimiter } from '../services/rate-limit.service.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { requireNotSuspended } from '../auth/suspension.js';
+import { requireNotSuspendedMiddleware } from '../auth/suspension.js';
 import sharp from 'sharp';
+import { upload } from '../middlewares/upload.js';
+import type { StorageAdapter } from '../storage/adapter.js';
+export type StorageResolverFn = (userId: string) => Promise<StorageAdapter>;
 
 const securityConfig = getSecurityConfig();
 
@@ -22,8 +24,6 @@ const TEXT_EXTENSIONS = new Set([
   'json', 'yaml', 'yml', 'xml', 'md', 'txt', 'csv', 'ipynb',
   'env', 'sh', 'bat', 'ps1', 'toml', 'ini', 'cfg', 'conf', 'log', 'dockerfile', 'tex', 'rtf',
 ]);
-
-const MAX_UPLOAD_SIZE = securityConfig.maxUploadBytes;
 
 function getExtension(filename: string): string {
   const parts = filename.split('.');
@@ -58,292 +58,299 @@ function getContentType(ext: string): string {
   return types[ext] || 'application/octet-stream';
 }
 
-export function createFileRoutes(storage: StorageAdapter) {
-  return async function fileRoutes(fastify: FastifyInstance): Promise<void> {
-    // Upload files to a work
-    fastify.post<{ Params: { workId: string } }>(
-      '/api/works/:workId/files',
-      async (request, reply) => {
-        const db = getDb();
+export function createFileRoutes(resolveStorage: StorageResolverFn) {
+  const router = Router();
 
-        // Verify work ownership and get path info
-        const [work] = await db
-          .select({
-            id: works.id,
-            title: works.title,
-            subject_name: subjects.name,
-            session_name: academicSessions.name,
-          })
-          .from(works)
-          .innerJoin(subjects, eq(works.subjectId, subjects.id))
-          .innerJoin(academicSessions, eq(subjects.sessionId, academicSessions.id))
-          .where(and(
-            eq(works.id, Number(request.params.workId)),
-            eq(works.userId, request.userId),
-          ))
-          .limit(1);
+  // Upload files to a work
+  router.post(
+    '/api/works/:workId/files',
+    requireNotSuspendedMiddleware,
+    upload.array('files', 20),
+    async (req, res) => {
+      const db = getDb();
 
-        if (!work) {
-          return reply.status(404).send({ error: 'Work not found' });
-        }
+      // Verify work ownership and get path info
+      const [work] = await db
+        .select({
+          id: works.id,
+          title: works.title,
+          subject_name: subjects.name,
+          session_name: academicSessions.name,
+        })
+        .from(works)
+        .innerJoin(subjects, eq(works.subjectId, subjects.id))
+        .innerJoin(academicSessions, eq(subjects.sessionId, academicSessions.id))
+        .where(and(
+          eq(works.id, Number(req.params.workId)),
+          eq(works.userId, req.userId),
+        ))
+        .limit(1);
 
-        // Apply rate limit
-        const rateResult = rateLimiter.check(`upload:${request.userId}`, { limit: securityConfig.uploadRateLimit, windowMs: 60 * 1000 });
-        if (!rateResult.allowed) {
-          return reply.status(429).send({ error: 'Too many uploads per minute. Please slow down.' });
-        }
+      if (!work) {
+        res.status(404).json({ error: 'Work not found' });
+        return;
+      }
 
-        // Check if uploads are suspended
-        if (await requireNotSuspended(request, reply)) return;
+      // Apply rate limit
+      const rateResult = rateLimiter.check(`upload:${req.userId}`, { limit: securityConfig.uploadRateLimit, windowMs: 60 * 1000 });
+      if (!rateResult.allowed) {
+        res.status(429).json({ error: 'Too many uploads per minute. Please slow down.' });
+        return;
+      }
 
-        const parts = request.parts();
-        const uploadedFiles: (typeof files.$inferSelect)[] = [];
-        let totalSize = 0;
+      const filesArray = Array.isArray(req.files) ? req.files : [];
+      const uploadedFiles: (typeof files.$inferSelect)[] = [];
+      let totalSize = 0;
 
-        for await (const part of parts) {
-          if (part.type !== 'file') continue;
+      for (const part of filesArray) {
+        const filename = part.originalname;
+        if (!filename) continue;
 
-          const filename = part.filename;
-          if (!filename) continue;
+        const data = part.buffer;
 
-          const chunks: Buffer[] = [];
-          for await (const chunk of part.file) {
-            chunks.push(chunk);
-          }
-          const data = Buffer.concat(chunks);
+        // Fetch dynamic security config
+        const dynamicConfig = await getDynamicSecurityConfig(db, req.userId);
+        const ALLOWED_EXTENSIONS = new Set(dynamicConfig.allowedExtensions);
+        const MAX_UPLOAD_SIZE = dynamicConfig.maxUploadBytes;
 
-          // Fetch dynamic security config
-          const dynamicConfig = await getDynamicSecurityConfig(db, request.userId);
-          const ALLOWED_EXTENSIONS = new Set(dynamicConfig.allowedExtensions);
-          const MAX_UPLOAD_SIZE = dynamicConfig.maxUploadBytes;
+        const validation = validateUploadCandidate({
+          filename,
+          size: data.length,
+          contentType: part.mimetype,
+          allowedExtensions: ALLOWED_EXTENSIONS,
+          maxBytes: MAX_UPLOAD_SIZE,
+        });
 
-          const validation = validateUploadCandidate({
-            filename,
-            size: data.length,
-            contentType: part.mimetype,
-            allowedExtensions: ALLOWED_EXTENSIONS,
-            maxBytes: MAX_UPLOAD_SIZE,
+        if (!validation.valid) {
+          res.status(400).json({
+            error: validation.reason,
+            allowed: Array.from(ALLOWED_EXTENSIONS),
           });
+          return;
+        }
 
-          if (!validation.valid) {
-            return reply.status(400).send({
-              error: validation.reason,
-              allowed: Array.from(ALLOWED_EXTENSIONS),
-            });
-          }
+        const ext = validation.extension ?? getExtension(filename);
+        const sanitized = validation.sanitizedFilename ?? filename;
+        const storageKey = buildStorageKey(
+          req.userId,
+          work.session_name,
+          work.subject_name,
+          work.title,
+          sanitized,
+        );
+        const contentType = validation.contentType ?? getContentType(ext);
+        let finalData = data;
+        let finalMime = contentType;
 
-          const ext = validation.extension ?? getExtension(filename);
-          const sanitized = validation.sanitizedFilename ?? filename;
-          const storageKey = buildStorageKey(
-            request.userId,
-            work.session_name,
-            work.subject_name,
-            work.title,
-            sanitized,
-          );
-          const contentType = validation.contentType ?? getContentType(ext);
-          let finalData = data;
-          let finalMime = contentType;
-
-          // Apply intelligent image compression (skip SVG and non-images)
-          if (contentType.startsWith('image/') && contentType !== 'image/svg+xml') {
-            try {
-              const image = sharp(data).resize(1920, 1920, { fit: 'inside', withoutEnlargement: true });
-              if (contentType === 'image/jpeg' || contentType === 'image/jpg') {
-                finalData = await image.jpeg({ quality: 82 }).toBuffer();
-              } else if (contentType === 'image/png') {
-                finalData = await image.png({ quality: 82, compressionLevel: 9 }).toBuffer();
-              } else if (contentType === 'image/webp') {
-                finalData = await image.webp({ quality: 82 }).toBuffer();
-              }
-            } catch (err) {
-              console.warn('Image compression failed, using original buffer', err);
+        // Apply intelligent image compression (skip SVG and non-images)
+        if (contentType.startsWith('image/') && contentType !== 'image/svg+xml') {
+          try {
+            const image = sharp(data).resize(1920, 1920, { fit: 'inside', withoutEnlargement: true });
+            if (contentType === 'image/jpeg' || contentType === 'image/jpg') {
+              finalData = await image.jpeg({ quality: 82 }).toBuffer();
+            } else if (contentType === 'image/png') {
+              finalData = await image.png({ quality: 82, compressionLevel: 9 }).toBuffer();
+            } else if (contentType === 'image/webp') {
+              finalData = await image.webp({ quality: 82 }).toBuffer();
             }
+          } catch (err) {
+            console.warn('Image compression failed, using original buffer', err);
           }
-
-          const finalSize = finalData.length;
-          totalSize += finalSize;
-          if (totalSize > MAX_UPLOAD_SIZE) {
-            return reply.status(400).send({
-              error: `Total upload size exceeds ${Math.round(MAX_UPLOAD_SIZE / (1024 * 1024))} MB limit (current: ${(totalSize / 1024 / 1024).toFixed(1)} MB)`,
-            });
-          }
-
-          await storage.upload(storageKey, finalData, finalMime);
-
-          await writeAuditLog({
-            userId: request.userId,
-            action: 'file_uploaded',
-            resourceType: 'file',
-            resourceId: undefined,
-            ipAddress: request.ip,
-            userAgent: request.headers['user-agent'],
-            metadata: {
-              workId: request.params.workId,
-              filename: sanitized,
-              fileSize: finalSize,
-              mimeType: finalMime,
-            },
-          });
-
-          await updateUserUsage({
-            userId: request.userId,
-            storageDelta: finalSize,
-            fileDelta: 1,
-            uploadDelta: 1,
-            timestamp: new Date().toISOString(),
-          });
-          await evaluateAbuseSignals({
-            userId: request.userId,
-            action: 'upload',
-            ipAddress: request.ip,
-            userAgent: request.headers['user-agent'],
-          });
-
-          const [file] = await db
-            .insert(files)
-            .values({
-              workId: Number(request.params.workId),
-              userId: request.userId,
-              filename,
-              sanitizedFilename: sanitized,
-              extension: ext,
-              sizeBytes: finalSize,
-              storageKey,
-              contentType: finalMime,
-            })
-            .returning();
-
-          uploadedFiles.push(file);
         }
 
-        if (uploadedFiles.length === 0) {
-          return reply.status(400).send({ error: 'No files were uploaded' });
+        const finalSize = finalData.length;
+        totalSize += finalSize;
+        if (totalSize > MAX_UPLOAD_SIZE) {
+          res.status(400).json({
+            error: `Total upload size exceeds ${Math.round(MAX_UPLOAD_SIZE / (1024 * 1024))} MB limit (current: ${(totalSize / 1024 / 1024).toFixed(1)} MB)`,
+          });
+          return;
         }
 
-        // Update work timestamp
-        await db
-          .update(works)
-          .set({ updatedAt: new Date().toISOString() })
-          .where(eq(works.id, Number(request.params.workId)));
+        const storage = await resolveStorage(req.userId);
+        await storage.upload(storageKey, finalData, finalMime);
 
-        return reply.status(201).send({ files: uploadedFiles, count: uploadedFiles.length });
-      },
-    );
-
-    // List files for a work
-    fastify.get<{ Params: { workId: string } }>(
-      '/api/works/:workId/files',
-      async (request, reply) => {
-        const db = getDb();
-
-        const [work] = await db
-          .select({ id: works.id })
-          .from(works)
-          .where(and(eq(works.id, Number(request.params.workId)), eq(works.userId, request.userId)))
-          .limit(1);
-
-        if (!work) {
-          return reply.status(404).send({ error: 'Work not found' });
-        }
-
-        const result = await db
-          .select()
-          .from(files)
-          .where(eq(files.workId, Number(request.params.workId)))
-          .orderBy(sql`${files.createdAt} DESC`);
-
-        return { files: result };
-      },
-    );
-
-    // Download a single file
-    fastify.get<{ Params: { id: string } }>('/api/files/:id', async (request, reply) => {
-      const db = getDb();
-      const [file] = await db
-        .select()
-        .from(files)
-        .where(and(eq(files.id, Number(request.params.id)), eq(files.userId, request.userId)))
-        .limit(1);
-
-      if (!file) {
-        return reply.status(404).send({ error: 'File not found' });
-      }
-
-      const { data, contentType } = await storage.download(file.storageKey);
-
-      return reply
-        .header('Content-Type', contentType)
-        .header('Content-Disposition', `attachment; filename="${file.filename}"`)
-        .header('Content-Length', data.length)
-        .send(data);
-    });
-
-    // Preview a file (text-based only)
-    fastify.get<{ Params: { id: string } }>('/api/files/:id/preview', async (request, reply) => {
-      const db = getDb();
-      const [file] = await db
-        .select()
-        .from(files)
-        .where(and(eq(files.id, Number(request.params.id)), eq(files.userId, request.userId)))
-        .limit(1);
-
-      if (!file) {
-        return reply.status(404).send({ error: 'File not found' });
-      }
-
-      if (!TEXT_EXTENSIONS.has(file.extension)) {
-        return reply.status(400).send({
-          error: 'Preview is only available for text-based files',
-          downloadOnly: true,
-        });
-      }
-
-      const { data } = await storage.download(file.storageKey);
-      const content = data.toString('utf-8');
-
-      return {
-        file: {
-          id: file.id,
-          filename: file.filename,
-          extension: file.extension,
-          size_bytes: file.sizeBytes,
-        },
-        content,
-        language: file.extension,
-      };
-    });
-
-    // Delete a single file (soft delete)
-    fastify.delete<{ Params: { id: string } }>('/api/files/:id', async (request, reply) => {
-      if (await requireNotSuspended(request, reply)) return;
-
-      const db = getDb();
-      const [file] = await db
-        .select()
-        .from(files)
-        .where(and(eq(files.id, Number(request.params.id)), eq(files.userId, request.userId)))
-        .limit(1);
-
-      if (!file) {
-        return reply.status(404).send({ error: 'File not found' });
-      }
-
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-      await db.transaction(async (tx) => {
-        await tx.insert(recycleBin).values({
-          userId: request.userId,
-          itemType: 'file',
-          itemId: file.id,
-          originalData: JSON.stringify({ file }),
-          expiresAt,
+        await writeAuditLog({
+          userId: req.userId,
+          action: 'file_uploaded',
+          resourceType: 'file',
+          resourceId: undefined,
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          metadata: {
+            workId: req.params.workId,
+            filename: sanitized,
+            fileSize: finalSize,
+            mimeType: finalMime,
+          },
         });
 
-        await tx.delete(files).where(eq(files.id, file.id));
+        await updateUserUsage({
+          userId: req.userId,
+          storageDelta: finalSize,
+          fileDelta: 1,
+          uploadDelta: 1,
+          timestamp: new Date().toISOString(),
+        });
+        await evaluateAbuseSignals({
+          userId: req.userId,
+          action: 'upload',
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+        });
+
+        const [file] = await db
+          .insert(files)
+          .values({
+            workId: Number(req.params.workId),
+            userId: req.userId,
+            filename,
+            sanitizedFilename: sanitized,
+            extension: ext,
+            sizeBytes: finalSize,
+            storageKey,
+            contentType: finalMime,
+          })
+          .returning();
+
+        uploadedFiles.push(file);
+      }
+
+      if (uploadedFiles.length === 0) {
+        res.status(400).json({ error: 'No files were uploaded' });
+        return;
+      }
+
+      // Update work timestamp
+      await db
+        .update(works)
+        .set({ updatedAt: new Date().toISOString() })
+        .where(eq(works.id, Number(req.params.workId)));
+
+      res.status(201).json({ files: uploadedFiles, count: uploadedFiles.length });
+    }
+  );
+
+  // List files for a work
+  router.get(
+    '/api/works/:workId/files',
+    async (req, res) => {
+      const db = getDb();
+
+      const [work] = await db
+        .select({ id: works.id })
+        .from(works)
+        .where(and(eq(works.id, Number(req.params.workId)), eq(works.userId, req.userId)))
+        .limit(1);
+
+      if (!work) {
+        res.status(404).json({ error: 'Work not found' });
+        return;
+      }
+
+      const result = await db
+        .select()
+        .from(files)
+        .where(eq(files.workId, Number(req.params.workId)))
+        .orderBy(sql`${files.createdAt} DESC`);
+
+      res.json({ files: result });
+    }
+  );
+
+  // Download a single file
+  router.get('/api/files/:id', async (req, res) => {
+    const db = getDb();
+    const [file] = await db
+      .select()
+      .from(files)
+      .where(and(eq(files.id, Number(req.params.id)), eq(files.userId, req.userId)))
+      .limit(1);
+
+    if (!file) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+
+    const storage = await resolveStorage(req.userId);
+    const { data, contentType } = await storage.download(file.storageKey);
+
+    res.set({
+      'Content-Type': contentType,
+      'Content-Disposition': `attachment; filename="${file.filename}"`,
+      'Content-Length': data.length
+    });
+    res.send(data);
+  });
+
+  // Preview a file (text-based only)
+  router.get('/api/files/:id/preview', async (req, res) => {
+    const db = getDb();
+    const [file] = await db
+      .select()
+      .from(files)
+      .where(and(eq(files.id, Number(req.params.id)), eq(files.userId, req.userId)))
+      .limit(1);
+
+    if (!file) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+
+    if (!TEXT_EXTENSIONS.has(file.extension)) {
+      res.status(400).json({
+        error: 'Preview is only available for text-based files',
+        downloadOnly: true,
+      });
+      return;
+    }
+
+    const storage = await resolveStorage(req.userId);
+    const { data } = await storage.download(file.storageKey);
+    const content = data.toString('utf-8');
+
+    res.json({
+      file: {
+        id: file.id,
+        filename: file.filename,
+        extension: file.extension,
+        size_bytes: file.sizeBytes,
+      },
+      content,
+      language: file.extension,
+    });
+  });
+
+  // Delete a single file (soft delete)
+  router.delete('/api/files/:id', requireNotSuspendedMiddleware, async (req, res) => {
+    const db = getDb();
+    const [file] = await db
+      .select()
+      .from(files)
+      .where(and(eq(files.id, Number(req.params.id)), eq(files.userId, req.userId)))
+      .limit(1);
+
+    if (!file) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    await db.transaction(async (tx: any) => {
+      await tx.insert(recycleBin).values({
+        userId: req.userId,
+        itemType: 'file',
+        itemId: file.id,
+        originalData: JSON.stringify({ file }),
+        expiresAt,
       });
 
-      return { success: true, message: 'File moved to recycle bin' };
+      await tx.delete(files).where(eq(files.id, file.id));
     });
-  };
+
+    res.json({ success: true, message: 'File moved to recycle bin' });
+  });
+
+  return router;
 }
