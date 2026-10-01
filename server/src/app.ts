@@ -48,6 +48,9 @@ import { clerkAuthMiddleware } from './auth/clerk.js';
 import { publicRoutes } from './routes-express/public.js';
 import { userRoutes } from './routes-express/user.js';
 import { searchRoutes } from './routes-express/search.js';
+import { sessionRoutes } from './routes-express/sessions.js';
+import { subjectRoutes } from './routes-express/subjects.js';
+import { workRoutes } from './routes-express/works.js';
 
 app.use(publicRoutes);
 
@@ -56,6 +59,9 @@ app.use(clerkAuthMiddleware);
 
 app.use(userRoutes);
 app.use(searchRoutes);
+app.use(sessionRoutes);
+app.use(subjectRoutes);
+app.use(workRoutes);
 
 async function start() {
   await initDatabase();
