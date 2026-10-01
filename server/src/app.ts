@@ -51,6 +51,16 @@ import { searchRoutes } from './routes-express/search.js';
 import { sessionRoutes } from './routes-express/sessions.js';
 import { subjectRoutes } from './routes-express/subjects.js';
 import { workRoutes } from './routes-express/works.js';
+import { createFileRoutes } from './routes-express/files.js';
+import { createDownloadRoutes } from './routes-express/download.js';
+import { createRecycleBinRoutes } from './routes-express/recycle-bin.js';
+import { createAdminRoutes } from './routes-express/admin.js';
+import { gdriveAuthRoutes } from './routes-express/gdrive-auth.js';
+
+import { resolveStorage } from './storage/resolver.js';
+import { createMockStorage } from './storage/mock.js';
+
+const fallbackStorage = createMockStorage('public');
 
 app.use(publicRoutes);
 
@@ -62,6 +72,11 @@ app.use(searchRoutes);
 app.use(sessionRoutes);
 app.use(subjectRoutes);
 app.use(workRoutes);
+app.use(createFileRoutes(resolveStorage));
+app.use(createDownloadRoutes(resolveStorage));
+app.use(createRecycleBinRoutes(resolveStorage));
+app.use(createAdminRoutes(resolveStorage, fallbackStorage));
+app.use(gdriveAuthRoutes());
 
 async function start() {
   await initDatabase();
