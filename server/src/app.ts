@@ -43,6 +43,14 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+import { clerkAuthMiddleware } from './auth/clerk.js';
+
+// Apply auth middleware to all subsequent routes
+app.use(clerkAuthMiddleware);
+
+// We will port routes in Phase 3
+// app.use('/api/user', userRoutes);
+
 async function start() {
   await initDatabase();
   console.log('[server-express] Database initialized');

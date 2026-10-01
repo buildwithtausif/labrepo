@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { Request, Response, NextFunction } from 'express';
 import { createClerkClient, verifyToken } from '@clerk/backend';
 import fp from 'fastify-plugin';
 
@@ -72,3 +73,57 @@ async function clerkAuthPlugin(fastify: FastifyInstance): Promise<void> {
 }
 
 export const clerkAuth = fp(clerkAuthPlugin);
+
+/**
+ * Clerk authentication middleware for Express.
+ * Verifies JWT from the Authorization header and decorates the request with userId.
+ */
+export const clerkAuthMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  // Skip auth for health and public endpoints
+  if (
+    req.path === '/health' ||
+    req.path.startsWith('/api/announcements') ||
+    req.path.startsWith('/api/public')
+  ) {
+    return next();
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (process.env.ENV === 'development') {
+      // Read dev role from cookie forwarded by the frontend
+      const cookieHeader = req.headers.cookie || '';
+      const match = cookieHeader.match(/devmode_role=(devadmin|testuser)/);
+      const role = match?.[1] || 'devadmin';
+      req.userId = role === 'testuser' ? DEV_TEST_USER_ID : DEV_ADMIN_ID;
+      return next();
+    }
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  const token = authHeader.substring(7);
+
+  try {
+    if (process.env.ENV === 'development') {
+      const cookieHeader = req.headers.cookie || '';
+      const match = cookieHeader.match(/devmode_role=(devadmin|testuser)/);
+      const role = match?.[1] || 'devadmin';
+      req.userId = role === 'testuser' ? DEV_TEST_USER_ID : DEV_ADMIN_ID;
+      return next();
+    }
+
+    const payload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY!,
+    });
+    if (!payload.sub) {
+      res.status(401).json({ error: 'Invalid token: no subject' });
+      return;
+    }
+    req.userId = payload.sub;
+    next();
+  } catch (err: any) {
+    console.error('[clerkAuthMiddleware] Token verification failed:', err);
+    res.status(401).json({ error: 'Invalid or expired token', details: err.message });
+  }
+};
