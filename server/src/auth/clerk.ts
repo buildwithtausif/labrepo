@@ -22,7 +22,10 @@ export const clerkAuthMiddleware = async (req: Request, res: Response, next: Nex
     if (process.env.ENV === 'development') {
       const cookieHeader = req.headers.cookie || '';
       const match = cookieHeader.match(/devmode_role=(devadmin|testuser)/);
-      const role = match?.[1] || 'devadmin';
+      let role = match?.[1];
+      if (!role) {
+         role = req.path.startsWith('/api/auth/gdrive') ? 'testuser' : 'devadmin';
+      }
       req.userId = role === 'testuser' ? DEV_TEST_USER_ID : DEV_ADMIN_ID;
       return next();
     }
@@ -36,7 +39,10 @@ export const clerkAuthMiddleware = async (req: Request, res: Response, next: Nex
     if (process.env.ENV === 'development') {
       const cookieHeader = req.headers.cookie || '';
       const match = cookieHeader.match(/devmode_role=(devadmin|testuser)/);
-      const role = match?.[1] || 'devadmin';
+      let role = match?.[1];
+      if (!role) {
+         role = req.path.startsWith('/api/auth/gdrive') ? 'testuser' : 'devadmin';
+      }
       req.userId = role === 'testuser' ? DEV_TEST_USER_ID : DEV_ADMIN_ID;
       return next();
     }

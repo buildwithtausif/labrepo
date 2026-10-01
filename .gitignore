@@ -9,3 +9,4 @@ server/data
 *.tar
 dist/
 server/tests/
+server/scripts/

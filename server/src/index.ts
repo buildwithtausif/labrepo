@@ -1,4 +1,5 @@
 import express from 'express';
+import 'express-async-errors';
 import cors from 'cors';
 import { initDatabase, closeDatabase } from './db/runtime.js';
 import { startCleanupJob } from './jobs/cleanup.js';
@@ -44,7 +45,7 @@ app.get('/health', (req, res) => {
 
 import { clerkAuthMiddleware } from './auth/clerk.js';
 
-import { publicRoutes } from './routes/public.js';
+import { createPublicRoutes } from './routes/public.js';
 import { userRoutes } from './routes/user.js';
 import { searchRoutes } from './routes/search.js';
 import { sessionRoutes } from './routes/sessions.js';
@@ -71,7 +72,7 @@ async function resolveStorage(userId: string): Promise<StorageAdapter> {
 }
 
 
-app.use(publicRoutes);
+app.use(createPublicRoutes(fallbackStorage));
 
 // Apply auth middleware to all subsequent routes
 app.use(clerkAuthMiddleware);
@@ -86,6 +87,16 @@ app.use(createDownloadRoutes(resolveStorage));
 app.use(createRecycleBinRoutes(resolveStorage));
 app.use(createAdminRoutes(resolveStorage, fallbackStorage));
 app.use(gdriveAuthRoutes());
+
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[Error Handled]', err.message);
+  const status = err.statusCode || err.status || 500;
+  res.status(status).json({
+    error: err.message || 'Internal Server Error',
+    code: status,
+  });
+});
 
 async function start() {
   await initDatabase();

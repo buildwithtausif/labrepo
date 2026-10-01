@@ -17,6 +17,7 @@
     "cors": "^2.8.5",
     "drizzle-orm": "^0.44.4",
     "express": "^4.21.2",
+    "express-async-errors": "^3.1.1",
     "fastify-plugin": "^6.0.0",
     "googleapis": "^182.0.0",
     "multer": "^1.4.5-lts.1",
