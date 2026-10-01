@@ -12,9 +12,9 @@ if (!userId) {
       <!-- Progress bar -->
       <div class="onboarding__progress bg-canvas">
         <div class="onboarding__progress-bar">
-          <div class="onboarding__progress-fill" id="progress-fill" style="width: 16.66%"></div>
+          <div class="onboarding__progress-fill" id="progress-fill" style="width: 14.28%"></div>
         </div>
-        <span class="text-caption text-muted" id="step-label">Step 1 of 6</span>
+        <span class="text-caption text-muted" id="step-label">Step 1 of 7</span>
       </div>
 
       <!-- Steps container -->
@@ -123,7 +123,7 @@ if (!userId) {
                 <button class="btn btn--secondary-pill" id="btn-add-subject">Add</button>
               </div>
 
-              <div class="flex flex-wrap gap-2 mt-4 min-h-[32px]" id="subjects-list"></div>
+              <div class="flex flex-wrap gap-2 mt-4 min-h-8" id="subjects-list"></div>
 
               <div class="mt-8">
                 <p class="text-caption text-muted mb-2">
@@ -233,14 +233,41 @@ if (!userId) {
 
             <div class="flex justify-center gap-4 mt-12">
               <button class="btn btn--secondary-pill" id="btn-back-4">Back</button>
-              <button class="btn btn--primary" id="btn-continue-5">Almost Done</button>
+              <button class="btn btn--primary" id="btn-continue-5">Continue</button>
               <button class="btn btn--ghost btn-skip" data-skip="6">Skip</button>
             </div>
           </div>
         </div>
 
-        <!-- Step 6: Finish -->
+        <!-- Step 6: Connect Storage -->
         <div class="onboarding__step" data-step="6">
+          <div class="onboarding__step-content">
+            <div class="step-icon text-success"><i class="bi bi-cloud-check"></i></div>
+            <h2 class="text-display-lg mb-4">Bring Your Own Storage</h2>
+            <p class="text-lead text-muted mb-8">
+              Own your data, no limits* 100% freedom. Connect your Google Drive to sync your files safely.
+            </p>
+
+            <div class="store-utility-card text-left mb-8 flex flex-col items-center py-12">
+              <button class="btn-gdrive-black" id="btn-connect-gdrive-onboard">
+                <i class="bi bi-google"></i> Connect Google Drive
+              </button>
+              <p class="text-caption text-muted mt-4">
+                <a href="/policy" target="_blank" class="text-link">Read our storage policy</a><br/>
+                <span class="text-[10px] opacity-70">* LabRepo still keeps the scope of files to what it is made for.</span>
+              </p>
+            </div>
+
+            <div class="flex justify-center gap-4 mt-12">
+              <button class="btn btn--secondary-pill" id="btn-back-5">Back</button>
+              <button class="btn btn--primary" id="btn-continue-6">Almost Done</button>
+              <button class="btn btn--ghost btn-skip" data-skip="7">Skip</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 7: Finish -->
+        <div class="onboarding__step" data-step="7">
           <div class="onboarding__step-content">
             <div class="step-icon text-primary mb-4" style="font-size: 48px;"><i class="bi bi-emoji-smile"></i></div>
             <h2 class="text-display-lg mb-4">You're All Set!</h2>
@@ -299,8 +326,8 @@ if (!userId) {
         function goToStep(step: number) {
           currentStep = step;
           
-          progressFill.style.width = `${(step / 6) * 100}%`;
-          stepLabel.textContent = `Step ${step} of 6`;
+          progressFill.style.width = `${(step / 7) * 100}%`;
+          stepLabel.textContent = `Step ${step} of 7`;
 
           document.querySelectorAll('.onboarding__step').forEach((el) => {
             const stepNum = parseInt((el as HTMLElement).dataset.step || '0');
@@ -314,17 +341,19 @@ if (!userId) {
         document.getElementById('btn-back-2')!.addEventListener('click', () => goToStep(2));
         document.getElementById('btn-back-3')!.addEventListener('click', () => goToStep(3));
         document.getElementById('btn-back-4')!.addEventListener('click', () => goToStep(4));
+        document.getElementById('btn-back-5')!.addEventListener('click', () => goToStep(5));
         document.getElementById('btn-continue-4')!.addEventListener('click', () => goToStep(5));
-        document.getElementById('btn-continue-5')!.addEventListener('click', () => {
+        document.getElementById('btn-continue-5')!.addEventListener('click', () => goToStep(6));
+        document.getElementById('btn-continue-6')!.addEventListener('click', () => {
           updateSummary();
-          goToStep(6);
+          goToStep(7);
         });
 
         // Skip buttons
         document.querySelectorAll('.btn-skip').forEach((btn) => {
           btn.addEventListener('click', () => {
             const target = parseInt((btn as HTMLElement).dataset.skip || '0');
-            if (target === 6) updateSummary();
+            if (target === 7) updateSummary();
             goToStep(target);
           });
         });
@@ -426,7 +455,25 @@ if (!userId) {
           goToStep(4);
         });
 
-        // Step 6: Summary & Finish
+        // Step 6: GDrive Auth
+        document.getElementById('btn-connect-gdrive-onboard')!.addEventListener('click', async () => {
+          try {
+            const btn = document.getElementById('btn-connect-gdrive-onboard')!;
+            btn.innerHTML = '<div class="spinner spinner--sm mr-2"></div> Connecting...';
+            btn.setAttribute('disabled', 'true');
+            await api.connectGDrive();
+            showToast('Google Drive connected successfully!', 'success');
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> Connected';
+            btn.classList.add('connected');
+          } catch (err: any) {
+            showToast('Failed to connect Google Drive: ' + err.message, 'error');
+            const btn = document.getElementById('btn-connect-gdrive-onboard')!;
+            btn.innerHTML = '<i class="bi bi-google"></i> Connect Google Drive';
+            btn.removeAttribute('disabled');
+          }
+        });
+
+        // Step 7: Summary & Finish
         function updateSummary() {
           const content = document.getElementById('summary-content')!;
           let html = '';
@@ -487,6 +534,32 @@ if (!userId) {
         background: var(--color-primary);
         border-radius: var(--radius-pill);
         transition: width 500ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      
+      .btn-gdrive-black {
+        background: #1f1f1f;
+        color: #fff;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 10px 18px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+      }
+      .btn-gdrive-black:hover:not(:disabled) {
+        background: #2a2a2a;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      }
+      .btn-gdrive-black:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+      .btn-gdrive-black.connected {
+        background: #22c55e;
+        border-color: #16a34a;
       }
 
       .onboarding__steps {
