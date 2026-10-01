@@ -1,6 +1,6 @@
 /**
  * LabRepo — Client-side API helper
- * Handles authenticated requests to the Fastify backend via Clerk session tokens.
+ * Handles authenticated requests to the Express backend via Clerk session tokens.
  */
 
 const API_BASE = '/api';
@@ -78,6 +78,9 @@ export const api = {
   getUserStatus: () => request('/user/status'),
   getStorageStats: () => request('/user/storage-stats'),
   completeOnboarding: () => request('/user/complete-onboarding', { method: 'POST', body: JSON.stringify({}) }),
+  getGDriveStatus: () => request('/user/gdrive/status'),
+  connectGDrive: () => request('/user/gdrive/connect', { method: 'POST' }),
+  disconnectGDrive: () => request('/user/gdrive/disconnect', { method: 'POST' }),
 
   // Sessions
   getSessions: () => request('/sessions'),

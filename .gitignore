@@ -42,3 +42,6 @@ docker-data/
 certbot/
 public/
 Dockerfile.vercel
+
+/server/scripts/
+/server/tests
