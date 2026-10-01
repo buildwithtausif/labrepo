@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { getDb } from '../../db/runtime.js';
-import { works, subjects, academicSessions, files } from '../../db/schema.js';
-import type { StorageResolverFn } from '../files.js';
+import { getDb } from '../db/runtime.js';
+import { works, subjects, academicSessions, files } from '../db/schema.js';
+import type { StorageResolverFn } from './files.js';
 import archiver from 'archiver';
 import { eq, and } from 'drizzle-orm';
 

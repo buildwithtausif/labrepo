@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { getDb } from '../../db/runtime.js';
-import { files, works, subjects, academicSessions } from '../../db/schema.js';
+import { getDb } from '../db/runtime.js';
+import { files, works, subjects, academicSessions } from '../db/schema.js';
 import { eq, and, like, gte, lte, sql } from 'drizzle-orm';
 
 export const searchRoutes = Router();
@@ -118,7 +118,7 @@ searchRoutes.get('/api/search', async (req, res) => {
 
   res.json({ 
     files: results, 
-    works: workResults.map(w => ({
+    works: workResults.map((w: any) => ({
       ...w,
       file_count: Number(w.file_count || 0)
     }))
@@ -149,6 +149,6 @@ searchRoutes.get('/api/search/filters', async (req, res) => {
   res.json({
     sessions,
     subjects: subjectsList,
-    extensions: extensions.map((e) => e.extension),
+    extensions: extensions.map((e: any) => e.extension),
   });
 });

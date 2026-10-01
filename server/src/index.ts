@@ -56,10 +56,20 @@ import { createRecycleBinRoutes } from './routes/recycle-bin.js';
 import { createAdminRoutes } from './routes/admin.js';
 import { gdriveAuthRoutes } from './routes/gdrive-auth.js';
 
-import { resolveStorage } from './storage/resolver.js';
-import { createMockStorage } from './storage/mock.js';
+import { requireGDriveAdapter } from './storage/resolver.js';
+import { MockS3Adapter } from './storage/mock-s3.js';
+import type { StorageAdapter } from './storage/adapter.js';
 
-const fallbackStorage = createMockStorage('public');
+const fallbackStorage = new MockS3Adapter();
+
+async function resolveStorage(userId: string): Promise<StorageAdapter> {
+  const driver = process.env.STORAGE_DRIVER || 'mock';
+  if (driver === 'gdrive') {
+    return await requireGDriveAdapter(userId);
+  }
+  return fallbackStorage;
+}
+
 
 app.use(publicRoutes);
 
@@ -81,7 +91,7 @@ async function start() {
   await initDatabase();
   console.log('[server] Database initialized');
 
-  startCleanupJob();
+  startCleanupJob(process.env.STORAGE_DRIVER || 'mock', fallbackStorage);
   
   app.listen(PORT, HOST, () => {
     console.log(`[server] LabRepo Express API running at http://${HOST}:${PORT}`);

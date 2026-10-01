@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { getDb } from '../../db/runtime.js';
-import { recycleBin, academicSessions, subjects, works, files } from '../../db/schema.js';
-import type { StorageResolverFn } from '../files.js';
-import { updateUserUsage } from '../../services/usage.service.js';
+import { getDb } from '../db/runtime.js';
+import { recycleBin, academicSessions, subjects, works, files } from '../db/schema.js';
+import type { StorageResolverFn } from './files.js';
+import { updateUserUsage } from '../services/usage.service.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { requireNotSuspendedMiddleware } from '../../auth/suspension.js';
+import { requireNotSuspendedMiddleware } from '../auth/suspension.js';
 
 export function createRecycleBinRoutes(resolveStorage: StorageResolverFn) {
   const router = Router();
@@ -79,7 +79,7 @@ export function createRecycleBinRoutes(resolveStorage: StorageResolverFn) {
         return;
       }
 
-      await db.transaction(async (tx) => {
+      await db.transaction(async (tx: any) => {
         switch (item.itemType) {
           case 'session':
             await restoreSession(tx, data);

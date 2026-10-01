@@ -1,18 +1,19 @@
 import { Router } from 'express';
-import { getDb } from '../../db/runtime.js';
-import { files, works, subjects, academicSessions, recycleBin } from '../../db/schema.js';
-import { buildStorageKey } from '../../storage/adapter.js';
-import { validateUploadCandidate } from '../../services/validation.service.js';
-import { writeAuditLog } from '../../services/audit.service.js';
-import { updateUserUsage } from '../../services/usage.service.js';
-import { evaluateAbuseSignals } from '../../services/moderation.service.js';
-import { getSecurityConfig, getDynamicSecurityConfig } from '../../services/config.service.js';
-import { rateLimiter } from '../../services/rate-limit.service.js';
+import { getDb } from '../db/runtime.js';
+import { files, works, subjects, academicSessions, recycleBin } from '../db/schema.js';
+import { buildStorageKey } from '../storage/adapter.js';
+import { validateUploadCandidate } from '../services/validation.service.js';
+import { writeAuditLog } from '../services/audit.service.js';
+import { updateUserUsage } from '../services/usage.service.js';
+import { evaluateAbuseSignals } from '../services/moderation.service.js';
+import { getSecurityConfig, getDynamicSecurityConfig } from '../services/config.service.js';
+import { rateLimiter } from '../services/rate-limit.service.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { requireNotSuspendedMiddleware } from '../../auth/suspension.js';
+import { requireNotSuspendedMiddleware } from '../auth/suspension.js';
 import sharp from 'sharp';
-import { upload } from '../../middlewares/upload.js';
-import type { StorageResolverFn } from '../files.js';
+import { upload } from '../middlewares/upload.js';
+import type { StorageAdapter } from '../storage/adapter.js';
+export type StorageResolverFn = (userId: string) => Promise<StorageAdapter>;
 
 const securityConfig = getSecurityConfig();
 
@@ -336,7 +337,7 @@ export function createFileRoutes(resolveStorage: StorageResolverFn) {
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    await db.transaction(async (tx) => {
+    await db.transaction(async (tx: any) => {
       await tx.insert(recycleBin).values({
         userId: req.userId,
         itemType: 'file',

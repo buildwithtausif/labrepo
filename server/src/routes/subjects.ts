@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { getDb } from '../../db/runtime.js';
-import { subjects, academicSessions, works, files, recycleBin } from '../../db/schema.js';
+import { getDb } from '../db/runtime.js';
+import { subjects, academicSessions, works, files, recycleBin } from '../db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { requireNotSuspendedMiddleware } from '../../auth/suspension.js';
+import { requireNotSuspendedMiddleware } from '../auth/suspension.js';
 
 export const subjectRoutes = Router();
 
@@ -42,7 +42,7 @@ subjectRoutes.get('/api/sessions/:sessionId/subjects', async (req, res) => {
     .orderBy(subjects.name);
 
   res.json({ 
-    subjects: result.map(s => ({
+    subjects: result.map((s: any) => ({
       ...s,
       work_count: Number(s.work_count || 0),
       file_count: Number(s.file_count || 0),
@@ -169,7 +169,7 @@ subjectRoutes.post('/api/sessions/:sessionId/subjects/batch', requireNotSuspende
   const created: typeof subjects.$inferSelect[] = [];
   const skipped: string[] = [];
 
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     for (const name of names) {
       const trimmed = String(name).trim();
       if (!trimmed) continue;
@@ -263,18 +263,18 @@ subjectRoutes.delete('/api/subjects/:id', requireNotSuspendedMiddleware, async (
   }
 
   const subjectWorks = await db.select().from(works).where(eq(works.subjectId, subject.id));
-  const workIds = subjectWorks.map((w) => w.id);
+  const workIds = subjectWorks.map((w: any) => w.id);
   let subjectFiles: typeof files.$inferSelect[] = [];
   if (workIds.length > 0) {
     subjectFiles = await db
       .select()
       .from(files)
-      .where(sql`${files.workId} IN (${sql.join(workIds.map(id => sql`${id}`), sql`, `)})`);
+      .where(sql`${files.workId} IN (${sql.join(workIds.map((id: any) => sql`${id}`), sql`, `)})`);
   }
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     await tx.insert(recycleBin).values({
       userId: req.userId,
       itemType: 'subject',

@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { getDb } from "../../db/runtime.js";
-import { users } from "../../db/schema.js";
+import { getDb } from "../db/runtime.js";
+import { users } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { createOAuth2Client } from "../../storage/resolver.js";
-import { writeAuditLog } from "../../services/audit.service.js";
+import { createOAuth2Client } from "../storage/resolver.js";
+import { writeAuditLog } from "../services/audit.service.js";
 import { google } from "googleapis";
 
 export function gdriveAuthRoutes() {

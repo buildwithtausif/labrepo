@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { getDb } from '../../db/runtime.js';
-import { users, files, userUsageStats } from '../../db/schema.js';
+import { getDb } from '../db/runtime.js';
+import { users, files, userUsageStats } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
-import { updateUserUsage } from '../../services/usage.service.js';
-import { evaluateAbuseSignals } from '../../services/moderation.service.js';
-import { getSecurityConfig } from '../../services/config.service.js';
-import { rateLimiter } from '../../services/rate-limit.service.js';
+import { updateUserUsage } from '../services/usage.service.js';
+import { evaluateAbuseSignals } from '../services/moderation.service.js';
+import { getSecurityConfig } from '../services/config.service.js';
+import { rateLimiter } from '../services/rate-limit.service.js';
 
 const securityConfig = getSecurityConfig();
 

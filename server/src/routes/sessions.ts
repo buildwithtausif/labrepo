@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { getDb } from '../../db/runtime.js';
-import { academicSessions, subjects, works, files, recycleBin } from '../../db/schema.js';
+import { getDb } from '../db/runtime.js';
+import { academicSessions, subjects, works, files, recycleBin } from '../db/schema.js';
 import { eq, and, sql, count } from 'drizzle-orm';
-import { requireNotSuspendedMiddleware } from '../../auth/suspension.js';
+import { requireNotSuspendedMiddleware } from '../auth/suspension.js';
 
 export const sessionRoutes = Router();
 
@@ -27,7 +27,7 @@ sessionRoutes.get('/api/sessions', async (req, res) => {
     .orderBy(sql`${academicSessions.createdAt} DESC`);
 
   res.json({ 
-    sessions: sessions.map(s => ({
+    sessions: sessions.map((s: any) => ({
       ...s,
       subject_count: Number(s.subject_count || 0),
       file_count: Number(s.file_count || 0)
@@ -191,7 +191,7 @@ sessionRoutes.delete('/api/sessions/:id', requireNotSuspendedMiddleware, async (
 
   // Gather all related data for recycle bin
   const sessionSubjects = await db.select().from(subjects).where(eq(subjects.sessionId, session.id));
-  const subjectIds = sessionSubjects.map((s) => s.id);
+  const subjectIds = sessionSubjects.map((s: any) => s.id);
 
   let sessionWorks: typeof works.$inferSelect[] = [];
   let sessionFiles: typeof files.$inferSelect[] = [];
@@ -200,20 +200,20 @@ sessionRoutes.delete('/api/sessions/:id', requireNotSuspendedMiddleware, async (
     sessionWorks = await db
       .select()
       .from(works)
-      .where(sql`${works.subjectId} IN (${sql.join(subjectIds.map(id => sql`${id}`), sql`, `)})`);
+      .where(sql`${works.subjectId} IN (${sql.join(subjectIds.map((id: any) => sql`${id}`), sql`, `)})`);
 
-    const workIds = sessionWorks.map((w) => w.id);
+    const workIds = sessionWorks.map((w: any) => w.id);
     if (workIds.length > 0) {
       sessionFiles = await db
         .select()
         .from(files)
-        .where(sql`${files.workId} IN (${sql.join(workIds.map(id => sql`${id}`), sql`, `)})`);
+        .where(sql`${files.workId} IN (${sql.join(workIds.map((id: any) => sql`${id}`), sql`, `)})`);
     }
   }
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     await tx.insert(recycleBin).values({
       userId: req.userId,
       itemType: 'session',

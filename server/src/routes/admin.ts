@@ -1,13 +1,13 @@
 import { Router } from 'express';
-import type { StorageAdapter } from '../../storage/adapter.js';
-import type { StorageResolverFn } from '../files.js';
-import { getDb } from '../../db/runtime.js';
-import { users, abuseFlags, auditLogs, userUsageStats, academicSessions, siteSettings, files, works, subjects, recycleBin, dailyUsageHistory, announcements } from '../../db/schema.js';
-import { writeAuditLog } from '../../services/audit.service.js';
+import type { StorageAdapter } from '../storage/adapter.js';
+import type { StorageResolverFn } from './files.js';
+import { getDb } from '../db/runtime.js';
+import { users, abuseFlags, auditLogs, userUsageStats, academicSessions, siteSettings, files, works, subjects, recycleBin, dailyUsageHistory, announcements } from '../db/schema.js';
+import { writeAuditLog } from '../services/audit.service.js';
 import { eq, sql, count, sum, desc } from 'drizzle-orm';
-import { clerkClient } from '../../auth/clerk.js';
+import { clerkClient } from '../auth/clerk.js';
 import sharp from 'sharp';
-import { upload } from '../../middlewares/upload.js';
+import { upload } from '../middlewares/upload.js';
 
 async function isAdminUser(userId: string): Promise<boolean> {
   if (userId === process.env.ADMIN_USER_ID || userId === process.env.CLERK_ADMIN_USER_ID) return true;
@@ -279,7 +279,7 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
     }
 
     // 2. Wipe everything from DB in a transaction
-    await db.transaction(async (tx) => {
+    await db.transaction(async (tx: any) => {
       await tx.delete(recycleBin).where(eq(recycleBin.userId, userId));
       await tx.delete(files).where(eq(files.userId, userId));
       await tx.delete(works).where(eq(works.userId, userId));
@@ -340,7 +340,7 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
     const db = getDb();
     const data = req.body as Record<string, string>;
     
-    await db.transaction(async (tx) => {
+    await db.transaction(async (tx: any) => {
       for (const [key, value] of Object.entries(data)) {
         if (!key || typeof value !== 'string') continue;
         const fullKey = `config.${key}`;
@@ -381,7 +381,7 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
     const db = getDb();
     const data = req.body as Record<string, string>;
     
-    await db.transaction(async (tx) => {
+    await db.transaction(async (tx: any) => {
       for (const [key, value] of Object.entries(data)) {
         if (!key || typeof value !== 'string') continue;
         const fullKey = `seo.${key}`;

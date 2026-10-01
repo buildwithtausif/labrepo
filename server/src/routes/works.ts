@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { getDb } from '../../db/runtime.js';
-import { works, subjects, academicSessions, files, recycleBin } from '../../db/schema.js';
+import { getDb } from '../db/runtime.js';
+import { works, subjects, academicSessions, files, recycleBin } from '../db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { requireNotSuspendedMiddleware } from '../../auth/suspension.js';
+import { requireNotSuspendedMiddleware } from '../auth/suspension.js';
 
 export const workRoutes = Router();
 
@@ -40,7 +40,7 @@ workRoutes.get('/api/subjects/:subjectId/works', async (req, res) => {
     .orderBy(sql`${works.createdAt} DESC`);
 
   res.json({ 
-    works: result.map(w => ({
+    works: result.map((w: any) => ({
       ...w,
       file_count: Number(w.file_count || 0),
       total_size: Number(w.total_size || 0)
@@ -176,7 +176,7 @@ workRoutes.delete('/api/works/:id', requireNotSuspendedMiddleware, async (req, r
   const workFiles = await db.select().from(files).where(eq(files.workId, work.id));
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  await db.transaction(async (tx) => {
+  await db.transaction(async (tx: any) => {
     await tx.insert(recycleBin).values({
       userId: req.userId,
       itemType: 'work',
