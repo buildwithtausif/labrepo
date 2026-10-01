@@ -29,7 +29,8 @@ pnpm-debug.log*
 # server data (SQLite + mock storage)
 server/data/
 server/dist/
-
+server/scripts/
+server/tests/
 # Docker persistent data
 docker-data/
 
