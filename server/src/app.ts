@@ -45,11 +45,17 @@ app.get('/health', (req, res) => {
 
 import { clerkAuthMiddleware } from './auth/clerk.js';
 
+import { publicRoutes } from './routes-express/public.js';
+import { userRoutes } from './routes-express/user.js';
+import { searchRoutes } from './routes-express/search.js';
+
+app.use(publicRoutes);
+
 // Apply auth middleware to all subsequent routes
 app.use(clerkAuthMiddleware);
 
-// We will port routes in Phase 3
-// app.use('/api/user', userRoutes);
+app.use(userRoutes);
+app.use(searchRoutes);
 
 async function start() {
   await initDatabase();
