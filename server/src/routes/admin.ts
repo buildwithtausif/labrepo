@@ -24,7 +24,7 @@ export function createAdminRoutes(resolveStorage: StorageResolverFn, fallbackSto
   const router = Router();
 
   // Middleware to enforce admin access
-  router.use(async (req, res, next) => {
+  router.use('/api/admin', async (req, res, next) => {
     const isAdmin = await isAdminUser(req.userId);
     if (!isAdmin) {
       res.status(403).json({ error: 'Admin access required' });

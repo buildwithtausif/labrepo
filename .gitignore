@@ -8,3 +8,4 @@ certbot/
 server/data
 *.tar
 dist/
+server/tests/
