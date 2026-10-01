@@ -78,9 +78,12 @@ export const api = {
   getUserStatus: () => request('/user/status'),
   getStorageStats: () => request('/user/storage-stats'),
   completeOnboarding: () => request('/user/complete-onboarding', { method: 'POST', body: JSON.stringify({}) }),
-  getGDriveStatus: () => request('/user/gdrive/status'),
-  connectGDrive: () => request('/user/gdrive/connect', { method: 'POST' }),
-  disconnectGDrive: () => request('/user/gdrive/disconnect', { method: 'POST' }),
+  getGDriveStatus: () => request('/auth/gdrive/status'),
+  connectGDrive: () => {
+    window.location.href = '/api/auth/gdrive';
+    return new Promise(() => {}); // Prevent immediate UI reset while redirecting
+  },
+  disconnectGDrive: () => request('/auth/gdrive/disconnect', { method: 'POST' }),
 
   // Sessions
   getSessions: () => request('/sessions'),
