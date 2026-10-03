@@ -8,6 +8,7 @@ export function DocumentIsland() {
   const [html, setHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     const handlePreview = (e: Event) => {
@@ -101,9 +102,36 @@ export function DocumentIsland() {
     );
   }
 
+  const resetZoom = () => {
+    setZoom(1);
+  };
+
   return (
-    <div className={styles.documentContainer}>
-      <div className={styles.documentPaper} dangerouslySetInnerHTML={{ __html: html || '' }} />
+    <div 
+      className={styles.documentContainer}
+    >
+      <div className={styles.zoomControls}>
+        <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} className="btn btn--secondary-pill btn--icon btn--sm" aria-label="Zoom Out" title="Zoom Out">
+          <i className="bi bi-dash"></i>
+        </button>
+        <span className={styles.zoomLevel}>{Math.round(zoom * 100)}%</span>
+        <button onClick={() => setZoom(z => Math.min(3, z + 0.1))} className="btn btn--secondary-pill btn--icon btn--sm" aria-label="Zoom In" title="Zoom In">
+          <i className="bi bi-plus"></i>
+        </button>
+        <button onClick={resetZoom} className="btn btn--ghost btn--icon btn--sm" aria-label="Reset Zoom" title="Reset Zoom">
+          <i className="bi bi-arrow-counterclockwise"></i>
+        </button>
+      </div>
+      <div className={styles.paperWrapper}>
+        <div 
+          className={extension === 'docx' ? styles.documentPaper : styles.spreadsheetPaper} 
+          style={{ 
+            zoom: zoom,
+            transition: 'zoom 0.2s ease'
+          }}
+          dangerouslySetInnerHTML={{ __html: html || '' }} 
+        />
+      </div>
     </div>
   );
 }

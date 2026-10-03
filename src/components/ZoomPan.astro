@@ -86,21 +86,32 @@ const {
 
   .zoom-controls {
     position: absolute;
-    bottom: 20px;
-    right: 20px;
+    bottom: 24px;
+    right: 24px;
     display: flex;
+    align-items: center;
     gap: 8px;
-    z-index: 10;
-    padding: 6px;
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--color-divider);
-    border-radius: var(--radius-md);
+    z-index: 50;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: var(--radius-pill);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
   }
 
-  @media (hover: none) and (pointer: coarse) {
+  :global(.dark) .zoom-controls {
+    background: rgba(30, 30, 36, 0.75);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  @media (max-width: 768px) {
     .zoom-controls {
-      display: none !important;
+      bottom: 16px;
+      right: 16px;
+      padding: 6px 10px;
     }
   }
 </style>
