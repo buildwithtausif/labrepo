@@ -1,8 +1,7 @@
 ---
 import Layout from '../Layouts/Layout.astro'
 
-const getEnv = (key: string) => typeof process !== 'undefined' ? process.env[key] : undefined;
-const apiUrl = getEnv('INTERNAL_API_URL') || import.meta.env.PUBLIC_API_URL || 'http://localhost:3001'
+const apiUrl = import.meta.env.INTERNAL_API_URL || import.meta.env.PUBLIC_API_URL || 'http://localhost:3001'
 
 let apiStatus = 'unknown'
 let storageStatus = 'unknown'

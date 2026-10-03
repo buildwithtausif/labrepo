@@ -35,7 +35,7 @@ export function createPublicRoutes(fallbackStorage: StorageAdapter) {
 
   router.get('/api/public/storage/*', async (req, res) => {
     try {
-      const key = req.params[0];
+      const key = (req.params as any)[0];
       if (!key) {
         res.status(400).json({ error: 'Key required' });
         return;

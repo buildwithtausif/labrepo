@@ -1,10 +1,15 @@
 import { clerkMiddleware } from "@clerk/astro/server";
 
-const isDevBypass = process.env.ENV === 'development';
+import { loadEnv } from "vite";
+const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
+const isDevBypass = env.ENV?.trim() === 'development';
+
+const ADMIN_USER_ID = env.ADMIN_USER_ID?.trim() || import.meta.env.ADMIN_USER_ID;
+const CLERK_ADMIN_USER_ID = env.CLERK_ADMIN_USER_ID?.trim() || import.meta.env.CLERK_ADMIN_USER_ID;
 
 const DEV_IDENTITIES = {
   devadmin: {
-    userId: process.env.ADMIN_USER_ID || process.env.CLERK_ADMIN_USER_ID || 'mock_dev_admin',
+    userId: ADMIN_USER_ID || CLERK_ADMIN_USER_ID || 'mock_dev_admin',
     role: 'admin',
   },
   testuser: {

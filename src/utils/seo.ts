@@ -22,8 +22,8 @@ export function buildSEO(props: SEOProps = {}, currentPath: string = '') {
   const image = props.image || defaultSEO.image;
   
   // Use a base URL from environment or fallback for canonical/OG links
-  const siteUrl = typeof process !== 'undefined' && process.env.PUBLIC_SITE_URL 
-    ? process.env.PUBLIC_SITE_URL 
+  const siteUrl = import.meta.env.PUBLIC_SITE_URL 
+    ? import.meta.env.PUBLIC_SITE_URL 
     : 'https://labrepo.app'; // Fallback URL if PUBLIC_SITE_URL is not set
     
   const url = props.canonicalUrl || `${siteUrl}${currentPath}`;

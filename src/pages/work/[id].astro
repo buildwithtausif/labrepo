@@ -1,7 +1,7 @@
 ---
 import Layout from '../../Layouts/Layout.astro'
 import ZoomPan from '../../components/ZoomPan.astro'
-import { NotebookIsland } from '../../components/NotebookIsland.tsx'
+import { NotebookIsland } from '../../components/NotebookIsland';
 
 const { userId } = Astro.locals.auth();
 if (!userId) {
@@ -72,9 +72,19 @@ const { id } = Astro.params;
           <input type="file" id="file-input" multiple style="display: none;" />
         </div>
         <div id="selected-files" class="mt-4" style="max-height: 240px; overflow-y: auto; overflow-x: hidden; padding-right: 8px;"></div>
-        <div id="upload-progress" style="display: none;" class="mt-6">
-          <div class="progress-bar"><div class="progress-bar__fill" id="progress-fill"></div></div>
-          <p id="upload-status" class="text-caption text-muted mt-2"></p>
+        <div id="upload-progress" style="display: none;" class="mt-4">
+          <div class="flex flex-col items-center justify-center">
+            <div class="relative w-8 h-8">
+              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <!-- Background Circle -->
+                <circle cx="18" cy="18" r="16" fill="none" class="stroke-current text-white/10" stroke-width="3.5"></circle>
+                <!-- Progress Circle -->
+                <circle id="progress-circle" cx="18" cy="18" r="16" fill="none" class="stroke-current text-primary" stroke-width="3.5" stroke-dasharray="100" stroke-dashoffset="100" stroke-linecap="round" style="transition: stroke-dashoffset 0.2s ease;"></circle>
+              </svg>
+            </div>
+            <p id="upload-status" class="text-body-strong mt-3 mb-1">Uploading...</p>
+            <p id="upload-stats" class="text-caption text-muted tracking-wide font-mono"></p>
+          </div>
         </div>
         <div class="flex justify-between gap-4 mt-8">
           <button class="btn btn--ghost" id="upload-cancel">Cancel</button>
@@ -396,7 +406,7 @@ const { id } = Astro.params;
           return parts[parts.length - 1].toLowerCase();
         }
 
-        function getUnsupportedFiles(files: File[]) {
+        function getUnsupportedFiles(files: File[]): File[] {
           // Validation is strictly delegated to the backend, which resolves dynamic per-user permissions.
           return [];
         }
@@ -524,13 +534,33 @@ const { id } = Astro.params;
           btn.textContent = 'Uploading...';
 
           document.getElementById('upload-progress')!.style.display = 'block';
-          document.getElementById('progress-fill')!.style.width = '50%';
-          document.getElementById('upload-status')!.textContent = `Uploading ${selectedFiles.length} file(s)...`;
+          const progressCircle = document.getElementById('progress-circle')!;
+          const uploadStatus = document.getElementById('upload-status')!;
+          const uploadStats = document.getElementById('upload-stats')!;
+          
+          progressCircle.style.strokeDashoffset = '100';
+          uploadStatus.textContent = `Uploading ${selectedFiles.length} file(s)...`;
+          uploadStats.textContent = `0 MB / ${formatSize(total)}`;
 
           try {
-            await api.uploadFiles(workId, selectedFiles);
-            document.getElementById('progress-fill')!.style.width = '100%';
-            document.getElementById('upload-status')!.textContent = 'Done!';
+            await api.uploadFiles(workId, selectedFiles, (loaded: number, totalBytes: number) => {
+              const percent = Math.round((loaded / totalBytes) * 100);
+              progressCircle.style.strokeDashoffset = (100 - percent).toString();
+              uploadStats.textContent = `${formatSize(loaded)} / ${formatSize(totalBytes)}`;
+              
+              if (percent === 100) {
+                uploadStatus.textContent = `Processing & syncing to Google Drive...`;
+                // Make it "half-cut" for the loading state (shows 25% of the circle)
+                progressCircle.style.strokeDashoffset = '75';
+                // Spin the entire SVG element
+                const svg = progressCircle.closest('svg');
+                if (svg) svg.classList.add('animate-spin');
+              }
+            });
+            const svg = progressCircle.closest('svg');
+            if (svg) svg.classList.remove('animate-spin');
+            progressCircle.style.strokeDashoffset = '0';
+            uploadStatus.textContent = 'Done!';
             showToast('Files uploaded!', 'success');
             uploadModal.style.display = 'none';
             await loadFiles();
@@ -544,11 +574,27 @@ const { id } = Astro.params;
         });
 
         document.getElementById('btn-download-work')!.addEventListener('click', async () => {
+          const btn = document.getElementById('btn-download-work')! as HTMLButtonElement;
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
           try {
             showToast('Preparing download...', 'info');
-            const blob = await api.downloadWork(workId);
+            const blob = await api.downloadWork(workId, (progress: number, total: number) => {
+              if (total > 0) {
+                const percent = Math.round((progress / total) * 100);
+                btn.innerHTML = `<div class="spinner spinner--sm mr-2" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 16px; height: 16px; margin: 0;"></div> ${percent}% (${progress}/${total})`;
+              } else {
+                btn.innerHTML = `<div class="spinner spinner--sm mr-2" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 16px; height: 16px; margin: 0;"></div> Preparing...`;
+              }
+            });
             downloadBlob(blob, `${work.title}.zip`);
-          } catch (err: any) { showToast(err.message, 'error'); }
+            showToast('Download started!', 'success');
+          } catch (err: any) { 
+            showToast(err.message, 'error'); 
+          } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }
         });
       });
     </script>

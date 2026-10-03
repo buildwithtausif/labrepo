@@ -22,5 +22,8 @@ export default defineConfig({
     },
 
     plugins: [tailwindcss()],
+    optimizeDeps: {
+      include: ['react-markdown', 'remark-gfm']
+    }
   },
 });

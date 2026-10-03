@@ -316,7 +316,6 @@ if (!userId) {
           }
         } catch {}
 
-        let currentStep = 1;
         let createdSessionId: number | null = null;
         let subjects: string[] = [];
 
@@ -324,7 +323,6 @@ if (!userId) {
         const stepLabel = document.getElementById('step-label')!;
 
         function goToStep(step: number) {
-          currentStep = step;
           
           progressFill.style.width = `${(step / 7) * 100}%`;
           stepLabel.textContent = `Step ${step} of 7`;

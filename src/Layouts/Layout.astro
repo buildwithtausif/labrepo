@@ -17,7 +17,7 @@ const seoProps = { ...customSeo }
 // Fetch dynamic SEO settings from backend (SSR)
 let dynamicSeo = {};
 try {
-  const backendUrl = process.env.INTERNAL_API_URL || process.env.API_URL || 'http://localhost:3001';
+  const backendUrl = import.meta.env.INTERNAL_API_URL || import.meta.env.API_URL || 'http://localhost:3001';
   const res = await fetch(`${backendUrl}/api/public/seo`);
   if (res.ok) {
     const data = await res.json();
@@ -34,8 +34,12 @@ const seo = buildSEO(finalSeoProps, currentPath)
 
 const auth = Astro.locals.auth ? Astro.locals.auth() : null;
 const userId = auth ? auth.userId : null;
-const isAdmin = userId && (userId === process.env.ADMIN_USER_ID || userId === process.env.CLERK_ADMIN_USER_ID);
-const isDev = process.env.ENV === 'development';
+import { loadEnv } from "vite";
+const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
+const ADMIN_USER_ID = env.ADMIN_USER_ID?.trim() || import.meta.env.ADMIN_USER_ID;
+const CLERK_ADMIN_USER_ID = env.CLERK_ADMIN_USER_ID?.trim() || import.meta.env.CLERK_ADMIN_USER_ID;
+const isAdmin = userId && (userId === ADMIN_USER_ID || userId === CLERK_ADMIN_USER_ID);
+const isDev = env.ENV?.trim() === 'development';
 const devRole = (Astro.locals as any).devRole || 'devadmin';
 ---
 
@@ -123,6 +127,26 @@ const devRole = (Astro.locals as any).devRole || 'devadmin';
       .hawkins-badge i {
         font-size: 0.9rem;
       }
+      .gold-verified-tick {
+        position: absolute;
+        bottom: -3px;
+        right: -5px;
+        width: 18px;
+        height: 18px;
+        background: var(--color-nav-bg);
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        z-index: 10;
+      }
+      .gold-verified-tick i {
+        background: linear-gradient(135deg, #fff3a1 0%, #d4af37 45%, #ffdf73 60%, #a67b14 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-size: 17px;
+        line-height: 1;
+        filter: drop-shadow(0 1px 2px rgba(212,175,55,0.6));
+      }
     </style>
   </head>
   <body>
@@ -171,14 +195,14 @@ const devRole = (Astro.locals as any).devRole || 'devadmin';
 
           <div class="app-header__right">
             {isDev ? (
-              <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
                 {devRole === 'devadmin' ? (
                   <div class="hawkins-badge" title="Dev Admin">
-                    <i class="bi bi-star-fill"></i> DevAdmin
+                    <i class="bi bi-star-fill"></i> <span class="hide-mobile">DevAdmin</span>
                   </div>
                 ) : (
                   <div class="hawkins-badge" title="Test User" style="background: linear-gradient(135deg, #6b7280 0%, #9ca3af 50%, #6b7280 100%); box-shadow: 0 2px 8px rgba(107,114,128,0.4); border-color: #d1d5db;">
-                    <i class="bi bi-person"></i> TestUser
+                    <i class="bi bi-person"></i> <span class="hide-mobile">TestUser</span>
                   </div>
                 )}
               </div>
@@ -193,13 +217,38 @@ const devRole = (Astro.locals as any).devRole || 'devadmin';
                   </SignUpButton>
                 </Show>
                 <Show when="signed-in">
-                  <div style="display: flex; align-items: center;">
-                    {isAdmin && (
-                      <div class="hawkins-badge" title="Hawkins Chief of Police (Admin)">
-                        <i class="bi bi-star-fill"></i> Chief
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="position: relative; display: flex; align-items: center;">
+                      <UserButton />
+                      {isAdmin && (
+                        <div class="gold-verified-tick" title="Hawkins Chief of Police (Admin)">
+                          <i class="bi bi-patch-check-fill"></i>
+                        </div>
+                      )}
+                    </div>
+
+                    <div class="gdrive-topbar-widget group" id="gdrive-topbar-widget" style="display: none;">
+                      <div class="gdrive-topbar-indicator" id="gdrive-topbar-indicator">
+                        <div class="gdrive-signal" id="gdrive-topbar-pulse">
+                          <div class="bar bar-1"></div>
+                          <div class="bar bar-2"></div>
+                          <div class="bar bar-3"></div>
+                        </div>
+                        <svg id="gdrive-topbar-icon" role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor">
+                          <path d="M12.01 1.485c-2.082 0-3.754.02-3.743.047.01.02 1.708 3.001 3.774 6.62l3.76 6.574h3.76c2.081 0 3.753-.02 3.742-.047-.005-.02-1.708-3.001-3.775-6.62l-3.76-6.574zm-4.76 1.73a789.828 789.861 0 0 0-3.63 6.319L0 15.868l1.89 3.298 1.885 3.297 3.62-6.335 3.618-6.33-1.88-3.287C8.1 4.704 7.255 3.22 7.25 3.214zm2.259 12.653-.203.348c-.114.198-.96 1.672-1.88 3.287a423.93 423.948 0 0 1-1.698 2.97c-.01.026 3.24.042 7.222.042h7.244l1.796-3.157c.992-1.734 1.85-3.23 1.906-3.323l.104-.167h-7.249z"/>
+                        </svg>
                       </div>
-                    )}
-                    <UserButton />
+                      <div class="gdrive-topbar-dropdown" id="gdrive-topbar-dropdown">
+                        <div style="margin-bottom: 8px;">
+                          <h4 class="text-body-strong text-sm" style="font-size: 13px;">Google Drive Sync</h4>
+                          <p class="text-caption text-muted" id="gdrive-topbar-status-text" style="font-size: 11px;">Checking...</p>
+                        </div>
+                        <button class="btn btn--sm w-full" id="btn-gdrive-topbar-action" style="justify-content: center; min-width: 120px;">
+                          <div class="spinner spinner--sm mr-2" style="display:none;" id="gdrive-topbar-spinner"></div>
+                          <span id="gdrive-topbar-btn-text">Connect</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </Show>
               </>
@@ -283,6 +332,98 @@ const devRole = (Astro.locals as any).devRole || 'devadmin';
       </footer>
 
     <script src="../scripts/api.ts"></script>
+    <script>
+      import { api } from "../scripts/api";
+      
+      document.addEventListener('DOMContentLoaded', () => {
+        const widget = document.getElementById('gdrive-topbar-widget');
+        if (!widget) return;
+        
+        let isGDriveConnected = false;
+
+        async function loadGDriveStatus() {
+          try {
+            const status = await api.getGDriveStatus();
+            isGDriveConnected = status.connected;
+            updateGDriveUI();
+            widget!.style.display = 'flex';
+          } catch (e) {
+            // Probably not logged in, just don't show the widget
+          }
+        }
+
+        function updateGDriveUI() {
+          const widgetEl = document.getElementById("gdrive-topbar-widget")!;
+          const text = document.getElementById("gdrive-topbar-status-text")!;
+          const btnText = document.getElementById("gdrive-topbar-btn-text")!;
+
+          if (isGDriveConnected) {
+            widgetEl.classList.add('connected');
+            text.textContent = 'Connected and in-sync';
+            btnText.textContent = "Disconnect";
+          } else {
+            widgetEl.classList.remove('connected');
+            text.textContent = 'Not connected';
+            btnText.textContent = "Connect";
+          }
+        }
+
+        document.getElementById("btn-gdrive-topbar-action")?.addEventListener("click", async () => {
+          const btn = document.getElementById("btn-gdrive-topbar-action")! as HTMLButtonElement;
+          const spinner = document.getElementById("gdrive-topbar-spinner")!;
+          
+          btn.disabled = true;
+          spinner.style.display = "inline-block";
+
+          try {
+            if (isGDriveConnected) {
+              await api.disconnectGDrive();
+              isGDriveConnected = false;
+              if ((window as any).__labrepo_showToast) (window as any).__labrepo_showToast("Google Drive disconnected", "info");
+            } else {
+              await api.connectGDrive();
+              isGDriveConnected = true;
+              if ((window as any).__labrepo_showToast) (window as any).__labrepo_showToast("Google Drive connected", "success");
+            }
+            updateGDriveUI();
+            window.dispatchEvent(new Event('gdrive-status-changed'));
+          } catch (e: any) {
+            console.error(e);
+            if ((window as any).__labrepo_showToast) (window as any).__labrepo_showToast(e.message || "Action failed", "error");
+          } finally {
+            btn.disabled = false;
+            spinner.style.display = "none";
+          }
+        });
+
+        // Toggle dropdown on click (for mobile/touch devices)
+        const indicator = document.getElementById('gdrive-topbar-indicator');
+        indicator?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          widget!.classList.toggle('open');
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+          if (!widget!.contains(e.target as Node)) {
+            widget!.classList.remove('open');
+          }
+        });
+
+        // Prevent dropdown button click from closing the dropdown
+        document.getElementById('gdrive-topbar-dropdown')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('gdrive') === 'connected') {
+          window.history.replaceState({}, '', window.location.pathname);
+          if ((window as any).__labrepo_showToast) (window as any).__labrepo_showToast('Google Drive connected successfully!', 'success');
+        }
+
+        setTimeout(loadGDriveStatus, 500);
+      });
+    </script>
 
     {isDev && (
       <div id="devmode-switcher" class="devmode-switcher">
@@ -636,14 +777,99 @@ const devRole = (Astro.locals as any).devRole || 'devadmin';
   @media (max-width: 540px) {
     .app-header { padding: 10px 0; }
     .app-header__inner { padding: 0 12px; }
-    .app-header__logo { gap: 7px; font-size: 15px; }
+    .app-header__logo { gap: 7px; font-size: 15px; flex-shrink: 0; }
     .app-header__logo-icon { width: 28px; height: 28px; border-radius: 8px; font-size: 14px; }
-    .app-header__right { gap: 6px; }
+    .app-header__right { gap: 6px; flex-shrink: 0; }
     .app-header__right .btn { min-height: 38px; padding: 8px 11px; font-size: .8rem; white-space: nowrap; }
+    .hawkins-badge { padding: 4px 8px; font-size: 0.65rem; margin-right: 4px; }
+    .gdrive-topbar-indicator { padding: 4px 6px; gap: 4px; }
   }
 
   @media (max-width: 390px) {
     .app-header__logo { font-size: 14px; }
     .app-header__right .btn { padding-inline: 9px; font-size: .74rem; }
+  }
+  
+  .gdrive-topbar-widget {
+    position: relative;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  .gdrive-topbar-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    transition: background 0.2s;
+  }
+  .gdrive-topbar-indicator:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .gdrive-signal {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 12px;
+  }
+  .gdrive-signal .bar {
+    width: 3px;
+    background: var(--color-ink-muted);
+    border-radius: 1px;
+    opacity: 0.3;
+    transition: all 0.3s ease;
+  }
+  .gdrive-signal .bar-1 { height: 6px; }
+  .gdrive-signal .bar-2 { height: 9px; }
+  .gdrive-signal .bar-3 { height: 12px; }
+
+  .gdrive-topbar-widget.connected .gdrive-signal .bar {
+    background: #22c55e;
+    opacity: 1;
+  }
+  @keyframes signal-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .gdrive-topbar-widget.connected .gdrive-signal .bar {
+    animation: signal-pulse 2s infinite;
+  }
+  .gdrive-topbar-widget.connected .gdrive-signal .bar-2 { animation-delay: 0.2s; }
+  .gdrive-topbar-widget.connected .gdrive-signal .bar-3 { animation-delay: 0.4s; }
+
+  .gdrive-topbar-widget.connected #gdrive-topbar-icon {
+    color: var(--color-ink);
+    opacity: 1;
+  }
+  #gdrive-topbar-icon {
+    font-size: 14px;
+    color: var(--color-ink-muted);
+    opacity: 0.5;
+    transition: all 0.3s ease;
+  }
+
+  .gdrive-topbar-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background: #1e1e1e;
+    border: 1px solid var(--color-divider);
+    padding: 12px;
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-5px);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    z-index: 1000;
+  }
+  .gdrive-topbar-widget:hover .gdrive-topbar-dropdown,
+  .gdrive-topbar-widget.open .gdrive-topbar-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
   }
 </style>

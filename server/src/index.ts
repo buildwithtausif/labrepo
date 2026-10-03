@@ -39,8 +39,33 @@ app.use((req, res, next) => {
 });
 
 // Health check (no auth required)
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  let dbStatus = 'operational';
+  let storageStatus = 'operational';
+
+  try {
+    const { getDb } = await import('./db/runtime.js');
+    const { sql } = await import('drizzle-orm');
+    const db = getDb();
+    await db.execute(sql`SELECT 1`);
+  } catch (e) {
+    console.error("DB health check failed:", e);
+    dbStatus = 'down';
+  }
+
+  try {
+    await fallbackStorage.exists('health-check-ping');
+  } catch (e) {
+    console.error("Storage health check failed:", e);
+    storageStatus = 'down';
+  }
+
+  res.json({
+    status: (dbStatus === 'down' || storageStatus === 'down') ? 'degraded' : 'ok',
+    timestamp: new Date().toISOString(),
+    db: dbStatus,
+    storage: storageStatus
+  });
 });
 
 import { clerkAuthMiddleware } from './auth/clerk.js';

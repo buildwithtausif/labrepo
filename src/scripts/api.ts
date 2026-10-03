@@ -45,7 +45,7 @@ async function request<T = any>(
   const response = await fetch(url, {
     ...options,
     headers,
-    signal: options.signal || (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
+    signal: options.signal || (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined),
   });
 
   if (!response.ok) {
@@ -79,8 +79,10 @@ export const api = {
   getStorageStats: () => request('/user/storage-stats'),
   completeOnboarding: () => request('/user/complete-onboarding', { method: 'POST', body: JSON.stringify({}) }),
   getGDriveStatus: () => request('/auth/gdrive/status'),
-  connectGDrive: () => {
-    window.location.href = '/api/auth/gdrive';
+  connectGDrive: async () => {
+    const token = await getToken();
+    if (!token) throw new Error('Not authenticated');
+    window.location.href = `/api/auth/gdrive?token=${encodeURIComponent(token)}`;
     return new Promise(() => {}); // Prevent immediate UI reset while redirecting
   },
   disconnectGDrive: () => request('/auth/gdrive/disconnect', { method: 'POST' }),
@@ -128,25 +130,53 @@ export const api = {
 
   // Files
   getFiles: (workId: number) => request(`/works/${workId}/files`),
-  uploadFiles: (workId: number, files: FileList | File[]) => {
-    const formData = new FormData();
-    for (const file of files) {
-      formData.append('files', file);
-    }
-    return request(`/works/${workId}/files`, {
-      method: 'POST',
-      body: formData,
+  uploadFiles: (workId: number, files: FileList | File[], onProgress?: (loaded: number, total: number) => void) => {
+    return new Promise<any>(async (resolve, reject) => {
+      const token = await getToken();
+      if (!token) return reject(new Error('Not authenticated'));
+
+      const formData = new FormData();
+      for (const file of files) {
+        formData.append('files', file);
+      }
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/works/${workId}/files`);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(e.loaded, e.total);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch { resolve({}); }
+        } else {
+          try {
+            const err = JSON.parse(xhr.responseText);
+            reject(new Error(err.error || `Upload failed: ${xhr.status}`));
+          } catch { reject(new Error(`Upload failed: ${xhr.status}`)); }
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Upload failed: network error'));
+      xhr.ontimeout = () => reject(new Error('Upload timed out'));
+      xhr.timeout = 300000; // 5 min timeout for uploads
+      xhr.send(formData);
     });
   },
   downloadFile: (id: number) => request(`/files/${id}`),
   previewFile: (id: number) => request(`/files/${id}/preview`),
   deleteFile: (id: number) => request(`/files/${id}`, { method: 'DELETE' }),
 
-  // Downloads (bulk)
-  downloadWork: (id: number) => request(`/download/work/${id}`),
-  downloadSubject: (id: number) => request(`/download/subject/${id}`),
-  downloadSession: (id: number) => request(`/download/session/${id}`),
-  downloadAll: () => request('/download/all'),
+  // Downloads (bulk) - uses background job with progress
+  downloadWork: (id: number, onProgress?: (p: number, total: number) => void) => downloadWithProgress(`/download/prepare/work/${id}`, onProgress),
+  downloadSubject: (id: number, onProgress?: (p: number, total: number) => void) => downloadWithProgress(`/download/prepare/subject/${id}`, onProgress),
+  downloadSession: (id: number, onProgress?: (p: number, total: number) => void) => downloadWithProgress(`/download/prepare/session/${id}`, onProgress),
+  downloadAll: (onProgress?: (p: number, total: number) => void) => downloadWithProgress('/download/prepare/all', onProgress),
 
   // Recycle Bin
   getRecycleBin: () => request('/recycle-bin'),
@@ -241,6 +271,37 @@ export function showToast(message: string, type: 'success' | 'error' | 'warning'
     toast.style.transition = 'all 300ms ease';
     setTimeout(() => toast.remove(), 300);
   }, 4000);
+}
+
+// --- Utility: Download with Progress ---
+async function downloadWithProgress(
+  preparePath: string,
+  onProgress?: (progress: number, total: number) => void
+): Promise<Blob> {
+  const job = await request<{ jobId: string }>(preparePath, { method: 'POST' });
+  const jobId = job.jobId;
+
+  while (true) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const status = await request<{ status: string, progress: number, total: number, error?: string }>(`/download/status/${jobId}`);
+    
+    if (status.status === 'error') {
+      throw new Error(status.error || 'Failed to prepare zip');
+    }
+    
+    if (onProgress) {
+      onProgress(status.progress, status.total);
+    }
+
+    if (status.status === 'ready') {
+      break;
+    }
+  }
+
+  return request(`/download/file/${jobId}`, {
+    // Disable timeout for the actual file transfer since it might take a while
+    signal: null as any
+  });
 }
 
 // --- Utility: Trigger file download from blob ---

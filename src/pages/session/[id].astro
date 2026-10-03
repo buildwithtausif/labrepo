@@ -322,13 +322,26 @@ const { id } = Astro.params;
         document
           .getElementById("btn-download-session")!
           .addEventListener("click", async () => {
+            const btn = document.getElementById("btn-download-session")! as HTMLButtonElement;
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
             try {
               showToast("Preparing download...", "info");
-              const blob = await api.downloadSession(sessionId);
+              const blob = await api.downloadSession(sessionId, (progress: number, total: number) => {
+                if (total > 0) {
+                  const percent = Math.round((progress / total) * 100);
+                  btn.innerHTML = `<div class="spinner spinner--sm mr-2" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 16px; height: 16px; margin: 0;"></div> ${percent}% (${progress}/${total})`;
+                } else {
+                  btn.innerHTML = `<div class="spinner spinner--sm mr-2" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 16px; height: 16px; margin: 0;"></div> Preparing...`;
+                }
+              });
               downloadBlob(blob, `${session.name}.zip`);
               showToast("Download started!", "success");
             } catch (err: any) {
               showToast(err.message, "error");
+            } finally {
+              btn.innerHTML = originalText;
+              btn.disabled = false;
             }
           });
       });

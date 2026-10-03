@@ -1,7 +1,7 @@
 ---
 import Layout from "../Layouts/Layout.astro";
 import ZoomPan from "../components/ZoomPan.astro";
-import { NotebookIsland } from "../components/NotebookIsland.tsx";
+import { NotebookIsland } from "../components/NotebookIsland";
 
 const { userId } = Astro.locals.auth();
 if (!userId) {
@@ -103,7 +103,7 @@ if (!userId) {
         </ZoomPan>
 
         <div id="search-preview-notebook-container" class="hidden w-full h-full overflow-y-auto">
-          <NotebookIsland client:load />
+          <NotebookIsland client:only="react" />
         </div>
       </div>
     </div>
@@ -116,6 +116,7 @@ if (!userId) {
         const formatSize = (window as any).__labrepo_formatSize;
         const formatRelativeTime = (window as any).__labrepo_formatRelativeTime;
         const textExts = new Set(['ipynb','py','js','mjs','cjs','jsx','ts','tsx','c','cpp','h','hpp','java','kt','cs','go','rs','swift','php','rb','r','scala','sql','html','css','scss','json','yaml','yml','xml','md','txt','csv','env','sh','bat','ps1','toml','ini','cfg','conf','log','dockerfile','tex','rtf']);
+        const imageExts = new Set(['png','jpg','jpeg','gif','webp','svg','ico']);
         const langMap: Record<string, string> = {
           py: 'python', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
           c: 'c', h: 'c', hpp: 'cpp', cpp: 'cpp', java: 'java', kt: 'kotlin', cs: 'csharp', go: 'go', rs: 'rust', swift: 'swift', php: 'php', rb: 'ruby', r: 'r', scala: 'scala', sql: 'sql',
@@ -222,6 +223,8 @@ if (!userId) {
               .map(
                 (file: any) => {
                   const isText = textExts.has(file.extension);
+                  const isImage = imageExts.has(file.extension);
+                  const isPreviewable = isText || isImage;
                   return `
               <div class="search-result store-utility-card animate-fade-in mb-4">
                 <a href="/work/${file.work_id}" class="search-result__details">
@@ -239,7 +242,9 @@ if (!userId) {
                   <span class="btn--dark-utility p-1 rounded">.${file.extension}</span>
                   <span class="hide-mobile">${formatSize(file.size_bytes)}</span>
                   <span class="hide-mobile">${formatRelativeTime(file.created_at)}</span>
-                  ${isText ? `<button class="btn btn--secondary-pill btn--sm btn-search-preview" data-id="${file.id}" data-name="${file.filename}" data-ext="${file.extension}"><i class="bi bi-code-slash"></i> Preview</button>` : ''}
+                  ${isPreviewable ? `<button class="btn btn--secondary-pill btn--sm btn-search-preview" data-id="${file.id}" data-name="${file.filename}" data-ext="${file.extension}"><i class="bi bi-eye"></i> Preview</button>` : ''}
+                  <button class="btn btn--secondary-pill btn--sm btn-download-file" data-id="${file.id}" data-name="${file.filename}" title="Download"><i class="bi bi-download"></i></button>
+                  <button class="btn btn--ghost btn--sm btn-delete-file" data-id="${file.id}" data-name="${file.filename}" title="Delete" style="color: #ff3b30;"><i class="bi bi-trash3"></i></button>
                 </div>
               </div>
             `;
@@ -275,10 +280,30 @@ if (!userId) {
           container.querySelectorAll(".btn-search-preview").forEach((button: any) => {
             button.addEventListener("click", () => openPreview(parseInt(button.dataset.id), button.dataset.name, button.dataset.ext));
           });
+          container.querySelectorAll(".btn-download-file").forEach((button: any) => {
+            button.addEventListener("click", async () => {
+              try {
+                const blob = await api.downloadFile(parseInt(button.dataset.id));
+                downloadBlob(blob, button.dataset.name);
+              } catch (err: any) { showToast(err.message, 'error'); }
+            });
+          });
+          container.querySelectorAll(".btn-delete-file").forEach((button: any) => {
+            button.addEventListener("click", async () => {
+              if (confirm(`Delete "${button.dataset.name}"?`)) {
+                try {
+                  await api.deleteFile(parseInt(button.dataset.id));
+                  showToast('File moved to recycle bin', 'success');
+                  doSearch();
+                } catch (err: any) { showToast(err.message, 'error'); }
+              }
+            });
+          });
         }
 
         const previewPanel = document.getElementById("search-preview-panel")!;
         let currentPreviewId: number | null = null;
+        let currentObjectUrl: string | null = null;
 
         async function openPreview(fileId: number, filename: string, extension: string) {
           currentPreviewId = fileId;
@@ -298,6 +323,25 @@ if (!userId) {
           window.dispatchEvent(new Event('clear-notebook'));
           
           if (zoomContainer.resetState) zoomContainer.resetState();
+
+          if (imageExts.has(extension)) {
+            try {
+              const blob = await api.downloadFile(fileId);
+              document.getElementById("search-preview-size")!.textContent = formatSize(blob.size);
+              currentObjectUrl = URL.createObjectURL(blob);
+              
+              defaultContent.classList.add('hidden');
+              zoomContainer.classList.remove('hidden');
+              zoomContainer.dataset.enablePan = 'true';
+              zoomContainer.dataset.enablePinch = 'true';
+              zoomSlot.innerHTML = `<img src="${currentObjectUrl}" style="max-width: 100%; max-height: 100%;" />`;
+            } catch (err: any) {
+              defaultContent.classList.remove('hidden');
+              zoomContainer.classList.add('hidden');
+              defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load image</p></div>`;
+            }
+            return;
+          }
 
           try {
             const result = await api.previewFile(fileId);
@@ -336,7 +380,14 @@ if (!userId) {
           }
         }
 
-        function closePreview() { previewPanel.style.display = "none"; currentPreviewId = null; }
+        function closePreview() { 
+          previewPanel.style.display = "none"; 
+          currentPreviewId = null; 
+          if (currentObjectUrl) {
+            URL.revokeObjectURL(currentObjectUrl);
+            currentObjectUrl = null;
+          }
+        }
         document.getElementById("search-preview-close")!.addEventListener("click", closePreview);
         
         let searchIsFullscreen = false;

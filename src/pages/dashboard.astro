@@ -6,7 +6,11 @@ if (!userId) {
   return Astro.redirect("/");
 }
 
-const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.CLERK_ADMIN_USER_ID;
+import { loadEnv } from "vite";
+const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
+const ADMIN_USER_ID = env.ADMIN_USER_ID?.trim() || import.meta.env.ADMIN_USER_ID;
+const CLERK_ADMIN_USER_ID = env.CLERK_ADMIN_USER_ID?.trim() || import.meta.env.CLERK_ADMIN_USER_ID;
+const isAdmin = userId === ADMIN_USER_ID || userId === CLERK_ADMIN_USER_ID;
 ---
 
 <Layout title="Dashboard">
@@ -50,6 +54,9 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
                 <p class="text-muted" id="stats-line">Your lab work repository</p>
               </div>
               <div class="flex gap-4 flex-wrap dashboard-actions items-center">
+            <div id="storage-pill" class="btn btn--dark-utility" style="display: none; cursor: default;">
+              <i class="bi bi-hdd-fill" style="color: #a78bfa;"></i> <span id="storage-used-text" style="font-weight: 600;">0 B</span> <span style="opacity: 0.7; font-weight: normal;">used</span>
+            </div>
               {isAdmin && (
                 <a href="/admin" class="btn btn--dark-utility border border-[#ffd700] text-[#ffd700] hover:bg-[#ffd700] hover:text-black transition-colors" title="Open Admin Panel">
                   <i class="bi bi-shield-shaded mr-2"></i> Open Admin
@@ -62,7 +69,10 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
             >
               <i class="bi bi-download"></i> Backup All
             </button>
-            <button class="btn btn--primary" id="btn-new-session">
+            <button class="btn btn--primary" id="btn-quick-upload">
+              <i class="bi bi-cloud-arrow-up"></i> Upload
+            </button>
+            <button class="btn btn--secondary-pill" id="btn-new-session">
               <i class="bi bi-plus-lg"></i> New Session
             </button>
           </div>
@@ -74,40 +84,8 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
               <article><strong id="stat-files">0</strong><span>Files</span></article>
             </div>
 
-            <!-- Storage Widget -->
-            <div class="store-utility-card" id="storage-widget" style="display: none; margin-top: var(--space-6); padding: var(--space-6);">
-              <div class="flex justify-between items-end mb-2">
-                <div>
-                  <h3 class="text-body-strong mb-1">Storage Usage</h3>
-                  <p class="text-caption text-muted" id="storage-text">Loading...</p>
-                </div>
-                <div class="text-caption text-muted" id="storage-percentage">0%</div>
-              </div>
-              <div class="storage-bar" id="storage-bar">
-                <!-- Segments will be injected here -->
-              </div>
-              <div class="storage-legend flex gap-4 flex-wrap mt-4 text-caption text-muted" id="storage-legend">
-                <!-- Legend will be injected here -->
-              </div>
-            </div>
 
-            <!-- GDrive Widget -->
-            <div class="store-utility-card" id="gdrive-widget" style="margin-top: var(--space-6); padding: var(--space-6); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
-              <div>
-                <h3 class="text-body-strong mb-1 flex items-center gap-2">
-                  <span id="gdrive-pulse" class="pulse-dot pulse-dot--danger"></span>
-                  Google Drive Sync
-                </h3>
-                <p class="text-caption text-muted" id="gdrive-status-text">Checking connection...</p>
-              </div>
-              <div class="flex items-center gap-4">
-                <a href="/policy" class="text-caption text-link hide-mobile">Storage Policy</a>
-                <button class="btn-gdrive-black" id="btn-gdrive-action">
-                  <div class="spinner spinner--sm mr-2" style="display:none;" id="gdrive-spinner"></div>
-                  <i class="bi bi-google" id="gdrive-icon"></i> <span id="gdrive-btn-text">Connect</span>
-                </button>
-              </div>
-            </div>
+
 
         <!-- Sessions grid -->
         <div
@@ -115,6 +93,13 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
           class="grid grid-cols-1 md:grid-cols-3 gap-6"
           style="margin-top: var(--space-12);"
         >
+        </div>
+
+        <!-- Language Bar (GitHub-style) -->
+        <div class="lang-bar-widget" id="lang-bar-widget" style="display: none;">
+          <h3 class="lang-bar-title">File Type Distribution</h3>
+          <div class="lang-bar" id="lang-bar"></div>
+          <div class="lang-legend" id="lang-legend"></div>
         </div>
 
         <!-- Empty state -->
@@ -129,6 +114,98 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
           </button>
         </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Upload Modal -->
+    <div id="quick-upload-modal" class="modal-overlay" style="display: none;">
+      <div class="modal" style="max-width: 560px;">
+        <h3 class="text-body-strong mb-2">Quick Upload</h3>
+        <p class="text-caption text-muted mb-6">Upload files directly to an existing or new subject.</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="text-caption text-muted block mb-2">Session</label>
+            <div class="searchable-select" id="upload-session-select">
+              <input type="hidden" id="upload-session-value" value="" />
+              <div class="searchable-select__trigger" tabindex="0">
+                <span class="searchable-select__text">Select a session...</span>
+                <i class="bi bi-chevron-down"></i>
+              </div>
+              <div class="searchable-select__dropdown">
+                <div class="searchable-select__search-wrapper">
+                  <i class="bi bi-search"></i>
+                  <input type="text" class="searchable-select__search" placeholder="Search sessions..." autocomplete="off" />
+                </div>
+                <div class="searchable-select__options"></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="text-caption text-muted block mb-2">Subject</label>
+            <div class="searchable-select disabled" id="upload-subject-select">
+              <input type="hidden" id="upload-subject-value" value="" />
+              <div class="searchable-select__trigger" tabindex="0">
+                <span class="searchable-select__text">Select a subject...</span>
+                <i class="bi bi-chevron-down"></i>
+              </div>
+              <div class="searchable-select__dropdown">
+                <div class="searchable-select__search-wrapper">
+                  <i class="bi bi-search"></i>
+                  <input type="text" class="searchable-select__search" placeholder="Search subjects..." autocomplete="off" />
+                </div>
+                <div class="searchable-select__options"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="new-subject-wrapper" style="display: none;" class="mb-4">
+          <label class="text-caption text-muted block mb-2">New Subject Name</label>
+          <input type="text" class="input" id="new-subject-input" placeholder="e.g. Biology 101" autocomplete="off" />
+        </div>
+
+        <label class="text-caption text-muted block mb-2">Work Title (optional)</label>
+        <input type="text" class="input" id="upload-work-title" autocomplete="off" />
+        <p class="text-caption text-muted mt-2 mb-6">
+          Leave empty to use today's date.
+        </p>
+
+        <div>
+          <label class="text-caption text-muted block mb-2">Files</label>
+          <div class="drop-zone" id="upload-drop-zone">
+            <div class="text-display-lg text-muted mb-2"><i class="bi bi-folder2-open"></i></div>
+            <p class="text-body-strong mb-1">
+              Drag & drop files here, or click to browse
+            </p>
+            <p class="text-caption text-muted">
+              Max 25 MB total
+            </p>
+            <input type="file" id="upload-file-input" multiple style="display: none;" />
+          </div>
+          <div id="upload-selected-files" class="mt-4" style="max-height: 240px; overflow-y: auto; overflow-x: hidden; padding-right: 8px;"></div>
+        </div>
+
+        <!-- Upload progress -->
+        <div id="quick-upload-progress" style="display: none;" class="mt-4">
+          <div class="flex flex-col items-center justify-center">
+            <div class="relative w-8 h-8">
+              <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <!-- Background Circle -->
+                <circle cx="18" cy="18" r="16" fill="none" class="stroke-current text-white/10" stroke-width="3.5"></circle>
+                <!-- Progress Circle -->
+                <circle id="quick-progress-circle" cx="18" cy="18" r="16" fill="none" class="stroke-current text-primary" stroke-width="3.5" stroke-dasharray="100" stroke-dashoffset="100" stroke-linecap="round" style="transition: stroke-dashoffset 0.2s ease;"></circle>
+              </svg>
+            </div>
+            <p id="quick-upload-status" class="text-body-strong mt-3 mb-1">Uploading...</p>
+            <p id="quick-upload-stats" class="text-caption text-muted tracking-wide font-mono"></p>
+          </div>
+        </div>
+
+        <div class="flex justify-between gap-4 mt-8">
+          <button class="btn btn--ghost" id="quick-upload-cancel">Cancel</button>
+          <button class="btn btn--primary" id="quick-upload-save">Upload</button>
         </div>
       </div>
     </div>
@@ -237,94 +314,34 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
         // Load sessions
         await loadSessions();
         await loadStorageStats();
-        await loadGDriveStatus();
-
-        let isGDriveConnected = false;
-
-        async function loadGDriveStatus() {
-          try {
-            const status = await api.getGDriveStatus();
-            isGDriveConnected = status.gdrive_connected;
-            updateGDriveUI();
-          } catch (e) {
-            console.error("Failed to load GDrive status:", e);
-            document.getElementById("gdrive-status-text")!.textContent = "Failed to load status";
-          }
-        }
-
-        function updateGDriveUI() {
-          const pulse = document.getElementById("gdrive-pulse")!;
-          const text = document.getElementById("gdrive-status-text")!;
-          const btnText = document.getElementById("gdrive-btn-text")!;
-          const icon = document.getElementById("gdrive-icon")!;
-
-          if (isGDriveConnected) {
-            pulse.className = "pulse-dot pulse-dot--success";
-            text.innerHTML = 'Connected and in-sync <span class="text-[10px] opacity-70 ml-2">(You own the data, no limits* 100% freedom)</span>';
-            btnText.textContent = "Disconnect";
-            icon.className = "bi bi-x-circle";
-          } else {
-            pulse.className = "pulse-dot pulse-dot--danger";
-            text.innerHTML = 'Not connected <span class="text-[10px] opacity-70 ml-2">(Bring your own storage, own your data)</span>';
-            btnText.textContent = "Connect";
-            icon.className = "bi bi-google";
-          }
-        }
-
-        document.getElementById("btn-gdrive-action")!.addEventListener("click", async () => {
-          const btn = document.getElementById("btn-gdrive-action")! as HTMLButtonElement;
-          const spinner = document.getElementById("gdrive-spinner")!;
-          const icon = document.getElementById("gdrive-icon")!;
-          
-          btn.disabled = true;
-          spinner.style.display = "inline-block";
-          icon.style.display = "none";
-
-          try {
-            if (isGDriveConnected) {
-              await api.disconnectGDrive();
-              showToast("Google Drive disconnected", "info");
-              isGDriveConnected = false;
-            } else {
-              await api.connectGDrive();
-              showToast("Google Drive connected", "success");
-              isGDriveConnected = true;
-            }
-            updateGDriveUI();
-          } catch (e: any) {
-            showToast(e.message || "Action failed", "error");
-          } finally {
-            btn.disabled = false;
-            spinner.style.display = "none";
-            icon.style.display = "inline-block";
-          }
-        });
 
         async function loadStorageStats() {
           try {
             const stats = await api.getStorageStats();
-            const widget = document.getElementById("storage-widget")!;
-            const textEl = document.getElementById("storage-text")!;
-            const percentEl = document.getElementById("storage-percentage")!;
-            const barEl = document.getElementById("storage-bar")!;
-            const legendEl = document.getElementById("storage-legend")!;
             
-            if (stats.allocated === 0) return;
+            const used = stats?.used || 0;
+            const storagePill = document.getElementById("storage-pill");
+            const storageText = document.getElementById("storage-used-text");
+            if (storagePill && storageText) {
+              const formatBytes = (bytes: number) => {
+                if (!+bytes) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+              };
+              storagePill.style.display = "flex";
+              storageText.textContent = formatBytes(used);
+            }
 
-            const formatSize = (window as any).__labrepo_formatSize;
-            widget.style.display = "block";
-            
-            const usedStr = formatSize(stats.used);
-            const allocatedStr = formatSize(stats.allocated);
-            const percent = Math.min(100, Math.round((stats.used / stats.allocated) * 100));
-            
-            textEl.textContent = `${usedStr} used of ${allocatedStr}`;
-            percentEl.textContent = `${percent}%`;
+            const widget = document.getElementById("lang-bar-widget")!;
+            const barEl = document.getElementById("lang-bar")!;
+            const legendEl = document.getElementById("lang-legend")!;
 
             const extColors: Record<string, string> = {
               js: '#f1e05a', mjs: '#f1e05a', cjs: '#f1e05a', jsx: '#f1e05a',
               ts: '#3178c6', tsx: '#3178c6',
-              py: '#3572A5', ipynb: '#3572A5',
+              py: '#3572A5', ipynb: '#DA5B0B',
               c: '#555555', h: '#555555', cpp: '#f34b7d', hpp: '#f34b7d',
               java: '#b07219', kt: '#A97BFF',
               cs: '#178600', go: '#00ADD8', rs: '#dea584',
@@ -340,47 +357,28 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
               xls: '#217346', xlsx: '#217346',
               ppt: '#d24726', pptx: '#d24726',
               rtf: '#7a7a7a', tex: '#3D6117',
+              png: '#a371f7', jpg: '#a371f7', jpeg: '#a371f7', gif: '#a371f7', svg: '#ff9800', webp: '#a371f7',
             };
             const defaultColor = '#858585';
 
+            const breakdown = (stats.breakdown || []).sort((a: any, b: any) => b.size - a.size);
+            const totalSize = breakdown.reduce((s: number, i: any) => s + (i.size || 0), 0);
+
+            if (breakdown.length === 0 || totalSize === 0) return;
+
+            widget.style.display = 'block';
             let barHtml = '';
             let legendHtml = '';
-            let totalVisualWidth = 0;
 
-            // Sort breakdown by size descending
-            const breakdown = stats.breakdown.sort((a: any, b: any) => b.size - a.size);
-            
             breakdown.forEach((item: any) => {
-              if (item.size === 0) return;
+              if (!item.size) return;
               const color = extColors[item.ext] || defaultColor;
-              let widthPercent = (item.size / stats.allocated) * 100;
-              
-              // Ensure even tiny files get a minimum visual width if they exist, but don't overflow
-              if (widthPercent > 0 && widthPercent < 0.5) widthPercent = 0.5;
-              
-              totalVisualWidth += widthPercent;
-              if (totalVisualWidth > 100) widthPercent -= (totalVisualWidth - 100);
+              const pct = ((item.size / totalSize) * 100);
+              const pctDisplay = pct < 0.1 ? '<0.1' : pct.toFixed(1);
 
-              if (widthPercent > 0) {
-                barHtml += `<div class="storage-bar-segment" style="width: ${widthPercent}%; background-color: ${color};" title="${item.ext}: ${formatSize(item.size)}"></div>`;
-                legendHtml += `
-                  <div class="storage-legend-item">
-                    <span class="storage-legend-color" style="background-color: ${color};"></span>
-                    <span>${item.ext} (${formatSize(item.size)})</span>
-                  </div>
-                `;
-              }
+              barHtml += `<span class="lang-bar-seg" style="width:${Math.max(pct, 0.3)}%;background:${color}" title=".${item.ext} ${pctDisplay}%"></span>`;
+              legendHtml += `<span class="lang-legend-item"><span class="lang-dot" style="background:${color}"></span>.${item.ext} <span class="lang-pct">${pctDisplay}%</span></span>`;
             });
-
-            // Add empty space segment if not 100% full
-            if (totalVisualWidth < 100) {
-               barHtml += `<div class="storage-bar-segment" style="flex-grow: 1; background-color: transparent;"></div>`;
-            }
-
-            if (breakdown.length === 0) {
-              barHtml = `<div class="storage-bar-segment" style="width: 100%; background-color: rgba(255,255,255,0.05);"></div>`;
-              legendHtml = `<div class="storage-legend-item text-muted">No files yet</div>`;
-            }
 
             barEl.innerHTML = barHtml;
             legendEl.innerHTML = legendHtml;
@@ -431,7 +429,7 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
           const grid = document.getElementById("sessions-grid")!;
           grid.innerHTML = sessions
             .map(
-              (session: any, i: number) => `
+              (session: any) => `
             <div class="store-utility-card dashboard-session-card animate-fade-in" style="cursor: pointer;" data-session-id="${session.id}" onclick="window.location.href='/session/${session.id}'">
               <div class="dashboard-session-card__top">
                 <div class="dashboard-session-card__identity">
@@ -492,6 +490,360 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
             });
           });
         }
+
+        // --- Quick Upload Modal ---
+        const quickUploadModal = document.getElementById("quick-upload-modal")!;
+        const newSubjectWrapper = document.getElementById("new-subject-wrapper")!;
+        const newSubjectInput = document.getElementById("new-subject-input") as HTMLInputElement;
+        const workTitleInput = document.getElementById("upload-work-title") as HTMLInputElement;
+        const dropZone = document.getElementById("upload-drop-zone")!;
+        const fileInput = document.getElementById("upload-file-input") as HTMLInputElement;
+        const selectedFilesDiv = document.getElementById("upload-selected-files")!;
+        const sessionInputVal = document.getElementById("upload-session-value") as HTMLInputElement;
+        const subjectInputVal = document.getElementById("upload-subject-value") as HTMLInputElement;
+        
+        let quickSelectedFiles: File[] = [];
+
+        // Fuzzy Match Helper
+        function fuzzyMatch(pattern: string, str: string) {
+          pattern = pattern.toLowerCase().replace(/\s+/g, '');
+          str = str.toLowerCase();
+          let pIdx = 0, sIdx = 0;
+          while (pIdx < pattern.length && sIdx < str.length) {
+            if (pattern[pIdx] === str[sIdx]) pIdx++;
+            sIdx++;
+          }
+          return pIdx === pattern.length;
+        }
+
+        class CustomSelect {
+          wrapper: HTMLElement;
+          input: HTMLInputElement;
+          trigger: HTMLElement;
+          text: HTMLElement;
+          dropdown: HTMLElement;
+          searchInput: HTMLInputElement;
+          optionsContainer: HTMLElement;
+          options: { value: string; label: string; isBold?: boolean }[] = [];
+          onChange: (val: string) => void;
+          placeholder: string;
+
+          constructor(wrapperId: string, placeholder: string, onChange: (val: string) => void) {
+            this.wrapper = document.getElementById(wrapperId)!;
+            this.input = this.wrapper.querySelector('input[type="hidden"]') as HTMLInputElement;
+            this.trigger = this.wrapper.querySelector('.searchable-select__trigger')!;
+            this.text = this.wrapper.querySelector('.searchable-select__text')!;
+            this.dropdown = this.wrapper.querySelector('.searchable-select__dropdown')!;
+            this.searchInput = this.wrapper.querySelector('.searchable-select__search') as HTMLInputElement;
+            this.optionsContainer = this.wrapper.querySelector('.searchable-select__options')!;
+            this.placeholder = placeholder;
+            this.onChange = onChange;
+
+            this.trigger.addEventListener('click', (e) => {
+              if (this.wrapper.classList.contains('disabled')) return;
+              e.stopPropagation();
+              const isOpen = this.wrapper.classList.contains('open');
+              document.querySelectorAll('.searchable-select').forEach(el => el.classList.remove('open'));
+              if (!isOpen) {
+                this.wrapper.classList.add('open');
+                this.searchInput.value = '';
+                this.renderOptions();
+                setTimeout(() => this.searchInput.focus(), 50);
+              }
+            });
+
+            this.searchInput.addEventListener('input', () => this.renderOptions());
+            this.searchInput.addEventListener('click', e => e.stopPropagation());
+            this.dropdown.addEventListener('click', e => e.stopPropagation());
+
+            document.addEventListener('click', () => {
+              this.wrapper.classList.remove('open');
+            });
+          }
+
+          setOptions(options: { value: string; label: string; isBold?: boolean }[]) {
+            this.options = options;
+            this.setValue('');
+            this.setDisabled(false);
+          }
+
+          setValue(val: string) {
+            if (this.input.value === val && val !== '') return;
+            this.input.value = val;
+            const opt = this.options.find(o => o.value === val);
+            this.text.textContent = opt ? opt.label : this.placeholder;
+            this.text.style.color = opt ? 'var(--color-ink)' : 'var(--color-ink-muted)';
+            this.onChange(val);
+          }
+
+          setDisabled(disabled: boolean, msg?: string) {
+            if (disabled) {
+              this.wrapper.classList.add('disabled');
+              this.input.value = '';
+              this.text.textContent = msg || 'Loading...';
+              this.text.style.color = 'var(--color-ink-muted)';
+            } else {
+              this.wrapper.classList.remove('disabled');
+              if (!this.input.value) {
+                this.text.textContent = this.placeholder;
+                this.text.style.color = 'var(--color-ink-muted)';
+              }
+            }
+          }
+          
+          setError(msg: string) {
+             this.wrapper.classList.add('disabled');
+             this.input.value = '';
+             this.text.textContent = msg;
+             this.text.style.color = 'var(--color-danger)';
+          }
+
+          renderOptions() {
+            const query = this.searchInput.value;
+            this.optionsContainer.innerHTML = '';
+            
+            let filtered = this.options;
+            if (query) {
+              filtered = this.options.filter(o => o.value === 'CREATE_NEW' || fuzzyMatch(query, o.label));
+            }
+
+            if (filtered.length === 0) {
+              this.optionsContainer.innerHTML = '<div class="searchable-select__empty">No results found</div>';
+              return;
+            }
+
+            filtered.forEach(opt => {
+              const el = document.createElement('div');
+              el.className = 'searchable-select__option';
+              if (opt.isBold) el.style.fontWeight = 'bold';
+              el.textContent = opt.label;
+              if (this.input.value === opt.value) el.classList.add('selected');
+              el.addEventListener('click', () => {
+                this.setValue(opt.value);
+                this.wrapper.classList.remove('open');
+              });
+              this.optionsContainer.appendChild(el);
+            });
+          }
+        }
+
+        const subjectSelect = new CustomSelect('upload-subject-select', 'Select a subject...', (val) => {
+          if (val === "CREATE_NEW") {
+            newSubjectWrapper.style.display = "block";
+            newSubjectInput.focus();
+          } else {
+            newSubjectWrapper.style.display = "none";
+            newSubjectInput.value = "";
+          }
+        });
+
+        const sessionSelect = new CustomSelect('upload-session-select', 'Select a session...', async (val) => {
+          if (!val) return;
+          subjectSelect.setDisabled(true, 'Loading subjects...');
+          newSubjectWrapper.style.display = "none";
+          newSubjectInput.value = "";
+
+          try {
+            const { subjects } = await api.getSubjects(parseInt(val));
+            const opts = subjects.map((s: any) => ({ value: s.id.toString(), label: s.name }));
+            opts.push({ value: 'CREATE_NEW', label: '+ Create New Subject', isBold: true });
+            subjectSelect.setOptions(opts);
+          } catch (err) {
+            showToast("Failed to load subjects", "error");
+            subjectSelect.setError('Error loading subjects');
+          }
+        });
+
+        workTitleInput.placeholder = new Date().toISOString().split('T')[0];
+
+        function resetQuickUploadProgress() {
+          const uploadProgress = document.getElementById('quick-upload-progress')!;
+          const uploadStatus = document.getElementById('quick-upload-status')!;
+          const progressCircle = document.getElementById('quick-progress-circle')!;
+          uploadProgress.style.display = 'none';
+          uploadStatus.textContent = 'Uploading...';
+          progressCircle.style.strokeDashoffset = '100';
+          const svg = progressCircle.closest('svg');
+          if (svg) svg.classList.remove('animate-spin');
+        }
+
+        async function openQuickUploadModal() {
+          quickUploadModal.style.display = "flex";
+          sessionSelect.setDisabled(false);
+          sessionSelect.setOptions([]);
+          sessionSelect.text.textContent = 'Loading...';
+          subjectSelect.setDisabled(true, 'Select a session first');
+          newSubjectWrapper.style.display = "none";
+          newSubjectInput.value = "";
+          workTitleInput.value = "";
+          quickSelectedFiles = [];
+          fileInput.value = "";
+          selectedFilesDiv.innerHTML = "";
+          resetQuickUploadProgress();
+
+          try {
+            const { sessions } = await api.getSessions();
+            if (sessions.length === 0) {
+              sessionSelect.setError('No sessions available. Create one first.');
+            } else {
+              sessionSelect.setOptions(sessions.map((s: any) => ({ value: s.id.toString(), label: s.name })));
+            }
+          } catch (err) {
+            showToast("Failed to load sessions", "error");
+            sessionSelect.setError('Error loading sessions');
+          }
+        }
+
+        document.getElementById("btn-quick-upload")?.addEventListener("click", openQuickUploadModal);
+        document.getElementById("quick-upload-cancel")!.addEventListener("click", () => { quickUploadModal.style.display = "none"; });
+        quickUploadModal.addEventListener("click", (e) => { if (e.target === quickUploadModal) quickUploadModal.style.display = "none"; });
+
+        function renderQuickSelectedFiles() {
+          const formatSize = (window as any).__labrepo_formatSize;
+          const totalSize = quickSelectedFiles.reduce((a, f) => a + f.size, 0);
+          const tooLarge = totalSize > 25 * 1024 * 1024;
+
+          selectedFilesDiv.innerHTML = quickSelectedFiles.map((f, i) => `
+            <div class="selected-file flex items-center justify-between py-2 border-b">
+              <span class="text-caption text-muted truncate mr-4"><i class="bi bi-file-earmark-text"></i> ${f.name}</span>
+              <span class="flex items-center gap-2">
+                <span class="text-caption text-muted">${formatSize(f.size)}</span>
+                <button class="btn btn--ghost remove-file" data-index="${i}" style="padding: 2px 8px;">×</button>
+              </span>
+            </div>
+          `).join('');
+
+          if (quickSelectedFiles.length > 0) {
+            selectedFilesDiv.innerHTML += `
+              <div class="text-caption mt-2 ${tooLarge ? 'text-danger' : 'text-muted'}">
+                Total: ${formatSize(totalSize)} / 25 MB ${tooLarge ? '— exceeds limit!' : ''}
+              </div>
+            `;
+          }
+
+          selectedFilesDiv.querySelectorAll('.remove-file').forEach((btn: any) => {
+            btn.addEventListener('click', () => {
+              quickSelectedFiles.splice(parseInt(btn.dataset.index), 1);
+              renderQuickSelectedFiles();
+            });
+          });
+        }
+
+        function handleQuickFiles(files: File[]) {
+          quickSelectedFiles = [...quickSelectedFiles, ...files];
+          renderQuickSelectedFiles();
+        }
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('active'); });
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('active');
+          if (e.dataTransfer?.files) handleQuickFiles(Array.from(e.dataTransfer.files));
+        });
+
+        fileInput.addEventListener('change', () => {
+          if (fileInput.files) handleQuickFiles(Array.from(fileInput.files));
+        });
+
+        document.getElementById('quick-upload-save')!.addEventListener('click', async () => {
+          const sessionId = parseInt(sessionInputVal.value);
+          let subjectId = parseInt(subjectInputVal.value);
+          const isNewSubject = subjectInputVal.value === "CREATE_NEW";
+          const newSubjectName = newSubjectInput.value.trim();
+          const title = workTitleInput.value.trim() || undefined;
+          const saveBtn = document.getElementById('quick-upload-save') as HTMLButtonElement;
+
+          if (!sessionId) {
+            showToast("Please select a session", "warning");
+            return;
+          }
+          if (!subjectId && !isNewSubject) {
+            showToast("Please select a subject", "warning");
+            return;
+          }
+          if (isNewSubject && !newSubjectName) {
+            showToast("Please enter a new subject name", "warning");
+            return;
+          }
+          if (quickSelectedFiles.length === 0) {
+            showToast("Please select at least one file to upload", "warning");
+            return;
+          }
+
+          let createdWorkId: number | null = null;
+          let createdSubjectId: number | null = null;
+
+          try {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Uploading...';
+
+            const totalSize = quickSelectedFiles.reduce((a, f) => a + f.size, 0);
+            if (totalSize > 25 * 1024 * 1024) {
+              showToast('Total file size exceeds 25 MB', 'error');
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Upload';
+              return;
+            }
+
+            if (isNewSubject) {
+              const { subject } = await api.createSubject(sessionId, newSubjectName);
+              subjectId = subject.id;
+              createdSubjectId = subject.id;
+            }
+
+            const { work } = await api.createWork(subjectId, title);
+            createdWorkId = work.id;
+
+            const formatSize = (window as any).__labrepo_formatSize;
+            
+            document.getElementById('quick-upload-progress')!.style.display = 'block';
+            const progressCircle = document.getElementById('quick-progress-circle')!;
+            const uploadStatus = document.getElementById('quick-upload-status')!;
+            const uploadStats = document.getElementById('quick-upload-stats')!;
+            
+            progressCircle.style.strokeDashoffset = '100';
+            uploadStatus.textContent = `Uploading ${quickSelectedFiles.length} file(s)...`;
+            uploadStats.textContent = `0 MB / ${formatSize(totalSize)}`;
+
+            await api.uploadFiles(work.id, quickSelectedFiles, (loaded: number, totalBytes: number) => {
+              const percent = Math.round((loaded / totalBytes) * 100);
+              progressCircle.style.strokeDashoffset = (100 - percent).toString();
+              uploadStats.textContent = `${formatSize(loaded)} / ${formatSize(totalBytes)}`;
+
+              if (percent === 100) {
+                uploadStatus.textContent = `Processing & syncing...`;
+                progressCircle.style.strokeDashoffset = '75';
+                const svg = progressCircle.closest('svg');
+                if (svg) svg.classList.add('animate-spin');
+              }
+            });
+
+            const svg = progressCircle.closest('svg');
+            if (svg) svg.classList.remove('animate-spin');
+            progressCircle.style.strokeDashoffset = '0';
+            uploadStatus.textContent = 'Upload complete!';
+
+            showToast('Work uploaded successfully!', 'success');
+            quickUploadModal.style.display = 'none';
+            await loadSessions();
+            await loadStorageStats();
+          } catch (err: any) {
+            if (createdWorkId) {
+              try { await api.deleteWork(createdWorkId); } catch (e) {}
+            }
+            if (createdSubjectId) {
+              try { await api.deleteSubject(createdSubjectId); } catch (e) {}
+            }
+            resetQuickUploadProgress();
+            showToast(err.message, 'error');
+          } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Upload';
+          }
+        });
+        // --- End Quick Upload Modal ---
 
         // New session modal
         const sessionModal = document.getElementById("session-modal")!;
@@ -594,13 +946,26 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
         });
 
         document.getElementById("btn-download-all")!.addEventListener("click", async () => {
+          const btn = document.getElementById("btn-download-all")! as HTMLButtonElement;
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
           try {
             showToast("Preparing backup...", "info");
-            const blob = await api.downloadAll();
+            const blob = await api.downloadAll((progress: number, total: number) => {
+              if (total > 0) {
+                const percent = Math.round((progress / total) * 100);
+                btn.innerHTML = `<div class="spinner spinner--sm mr-2" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 16px; height: 16px; margin: 0;"></div> ${percent}% (${progress}/${total})`;
+              } else {
+                btn.innerHTML = `<div class="spinner spinner--sm mr-2" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 16px; height: 16px; margin: 0;"></div> Preparing...`;
+              }
+            });
             downloadBlob(blob, "labrepo-backup.zip");
             showToast("Backup downloaded!", "success");
           } catch (err: any) {
             showToast(err.message, "error");
+          } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
           }
         });
       });
@@ -658,6 +1023,11 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
       .mt-2 { margin-top: 8px; }
       .mt-4 { margin-top: 17px; }
       .mt-8 { margin-top: 32px; }
+      .text-danger { color: #ff3b30; }
+      .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .py-2 { padding-top: 8px; padding-bottom: 8px; }
+      .mr-4 { margin-right: 17px; }
+      .border-b { border-bottom: 1px solid var(--color-divider); }
 
       @media (max-width: 768px) {
         .page-header {
@@ -692,30 +1062,53 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
         .dashboard-main .dashboard-session-card:hover { transform: translateY(-2px); }
         .dashboard-main #sessions-empty { min-height: 360px; }
       }
-      .storage-bar {
+      .lang-bar-widget {
+        margin-top: var(--space-8);
+        padding: 20px 0 0;
+      }
+      .lang-bar-title {
+        font-size: .8rem;
+        font-weight: 600;
+        color: #c9d1d9;
+        margin-bottom: 10px;
+      }
+      .lang-bar {
         display: flex;
-        height: 12px;
-        background-color: rgba(255, 255, 255, 0.05);
+        height: 8px;
         border-radius: 6px;
         overflow: hidden;
-        width: 100%;
-        margin-top: 8px;
+        background: rgba(255,255,255,.04);
       }
-      .storage-bar-segment {
+      .lang-bar-seg {
         height: 100%;
+        transition: width .4s ease;
       }
-      .storage-bar-segment:not(:last-child) {
-        border-right: 1px solid #1a1b20;
+      .lang-bar-seg:first-child { border-radius: 6px 0 0 6px; }
+      .lang-bar-seg:last-child { border-radius: 0 6px 6px 0; }
+      .lang-bar-seg:only-child { border-radius: 6px; }
+      .lang-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 18px;
+        margin-top: 10px;
       }
-      .storage-legend-item {
+      .lang-legend-item {
         display: flex;
         align-items: center;
         gap: 6px;
+        font-size: .75rem;
+        color: #8b949e;
       }
-      .storage-legend-color {
-        width: 10px;
-        height: 10px;
+      .lang-dot {
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
+        display: inline-block;
+        flex-shrink: 0;
+      }
+      .lang-pct {
+        color: #6e7681;
+        font-weight: 500;
       }
       
       .btn-gdrive-black {
@@ -767,6 +1160,126 @@ const isAdmin = userId === process.env.ADMIN_USER_ID || userId === process.env.C
         0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
         70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
         100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+      }
+      
+      /* Searchable Select Custom Styles */
+      .searchable-select {
+        position: relative;
+        width: 100%;
+        font-family: var(--font-body);
+      }
+      .searchable-select__trigger {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--color-divider);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        min-height: 44px;
+      }
+      .searchable-select:not(.disabled) .searchable-select__trigger:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.3);
+      }
+      .searchable-select.open .searchable-select__trigger {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), 0.2);
+      }
+      .searchable-select.disabled .searchable-select__trigger {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .searchable-select__text {
+        font-size: 0.9rem;
+        color: var(--color-ink-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .searchable-select__trigger i {
+        color: var(--color-ink-muted);
+        font-size: 0.8rem;
+        transition: transform 0.2s ease;
+      }
+      .searchable-select.open .searchable-select__trigger i {
+        transform: rotate(180deg);
+      }
+      .searchable-select__dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        background: #1e1e1e;
+        border: 1px solid var(--color-divider);
+        border-radius: var(--radius-md);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-10px);
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        flex-direction: column;
+        max-height: 300px;
+      }
+      .searchable-select.open .searchable-select__dropdown {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+      .searchable-select__search-wrapper {
+        display: flex;
+        align-items: center;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--color-divider);
+        gap: 10px;
+      }
+      .searchable-select__search-wrapper i {
+        color: var(--color-ink-muted);
+        font-size: 0.9rem;
+      }
+      .searchable-select__search {
+        background: transparent;
+        border: none;
+        color: var(--color-ink);
+        font-size: 0.9rem;
+        width: 100%;
+        outline: none;
+      }
+      .searchable-select__search:focus {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+      .searchable-select__search::placeholder {
+        color: var(--color-ink-muted);
+      }
+      .searchable-select__options {
+        overflow-y: auto;
+        padding: 6px;
+      }
+      .searchable-select__option {
+        padding: 10px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--color-ink);
+        font-size: 0.9rem;
+        transition: background 0.15s ease;
+      }
+      .searchable-select__option:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .searchable-select__option.selected {
+        background: var(--color-primary-soft);
+        color: white;
+      }
+      .searchable-select__empty {
+        padding: 16px;
+        text-align: center;
+        color: var(--color-ink-muted);
+        font-size: 0.9rem;
       }
     </style>
 </Layout>

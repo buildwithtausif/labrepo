@@ -3,7 +3,11 @@ import Layout from '../Layouts/Layout.astro';
 import { Show } from '@clerk/astro/components';
 import { defaultSEO } from '../utils/seo';
 
-const isDevBypass = process.env.ENV === 'development';
+import { loadEnv } from "vite";
+const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
+const ADMIN_USER_ID = env.ADMIN_USER_ID?.trim() || import.meta.env.ADMIN_USER_ID;
+const CLERK_ADMIN_USER_ID = env.CLERK_ADMIN_USER_ID?.trim() || import.meta.env.CLERK_ADMIN_USER_ID;
+const isDevBypass = env.ENV?.trim() === 'development';
 
 if (!isDevBypass) {
   const user = await Astro.locals.currentUser();
@@ -14,14 +18,14 @@ if (!isDevBypass) {
   // Strict role check
   if (
     user.publicMetadata?.role !== 'admin' &&
-    user.id !== process.env.ADMIN_USER_ID &&
-    user.id !== process.env.CLERK_ADMIN_USER_ID
+    user.id !== ADMIN_USER_ID &&
+    user.id !== CLERK_ADMIN_USER_ID
   ) {
     return Astro.redirect('/');
   }
 }
 
-const siteUrl = typeof process !== 'undefined' && process.env.PUBLIC_SITE_URL ? process.env.PUBLIC_SITE_URL : Astro.url.origin;
+const siteUrl = import.meta.env.PUBLIC_SITE_URL ? import.meta.env.PUBLIC_SITE_URL : Astro.url.origin;
 const displayUrl = siteUrl.replace(/^https?:\/\//, '');
 ---
 
@@ -681,7 +685,7 @@ const displayUrl = siteUrl.replace(/^https?:\/\//, '');
               list.innerHTML = '<div class="admin-list__placeholder text-muted text-caption">No announcements found.</div>';
               return;
             }
-            list.innerHTML = res.announcements.map((a) => `
+            list.innerHTML = res.announcements.map((a: any) => `
               <div class="border-b border-white/10 p-4 flex items-center justify-between gap-4">
                 <div>
                   <div class="flex items-center gap-2 mb-1">
@@ -700,16 +704,16 @@ const displayUrl = siteUrl.replace(/^https?:\/\//, '');
 
             list.querySelectorAll('.btn-edit-ann').forEach((btn) => {
               btn.addEventListener('click', () => {
-                const data = JSON.parse(btn.getAttribute('data-json'));
-                document.getElementById('announcement-id').value = data.id;
-                document.getElementById('announcement-title').value = data.title;
-                document.getElementById('announcement-message').value = data.message;
-                document.getElementById('announcement-type').value = data.type;
-                document.getElementById('announcement-status').value = data.isActive ? '1' : '0';
-                document.getElementById('announcement-url').value = data.url || '';
-                document.getElementById('announcement-url-label').value = data.urlLabel || '';
-                document.getElementById('announcement-form-title').textContent = 'Edit Announcement';
-                document.getElementById('announcement-form-container').style.display = 'block';
+                const data = JSON.parse(btn.getAttribute('data-json')!);
+                (document.getElementById('announcement-id') as HTMLInputElement).value = data.id;
+                (document.getElementById('announcement-title') as HTMLInputElement).value = data.title;
+                (document.getElementById('announcement-message') as HTMLInputElement).value = data.message;
+                (document.getElementById('announcement-type') as HTMLSelectElement).value = data.type;
+                (document.getElementById('announcement-status') as HTMLSelectElement).value = data.isActive ? '1' : '0';
+                (document.getElementById('announcement-url') as HTMLInputElement).value = data.url || '';
+                (document.getElementById('announcement-url-label') as HTMLInputElement).value = data.urlLabel || '';
+                document.getElementById('announcement-form-title')!.textContent = 'Edit Announcement';
+                document.getElementById('announcement-form-container')!.style.display = 'block';
               });
             });
 
@@ -729,26 +733,26 @@ const displayUrl = siteUrl.replace(/^https?:\/\//, '');
         }
 
         document.getElementById('btn-create-announcement')?.addEventListener('click', () => {
-          document.getElementById('announcement-form').reset();
-          document.getElementById('announcement-id').value = '';
-          document.getElementById('announcement-form-title').textContent = 'Create Announcement';
-          document.getElementById('announcement-form-container').style.display = 'block';
+          (document.getElementById('announcement-form') as HTMLFormElement).reset();
+          (document.getElementById('announcement-id') as HTMLInputElement).value = '';
+          document.getElementById('announcement-form-title')!.textContent = 'Create Announcement';
+          document.getElementById('announcement-form-container')!.style.display = 'block';
         });
 
         document.getElementById('btn-cancel-announcement')?.addEventListener('click', () => {
-          document.getElementById('announcement-form-container').style.display = 'none';
+          document.getElementById('announcement-form-container')!.style.display = 'none';
         });
 
         document.getElementById('announcement-form')?.addEventListener('submit', async (e) => {
           e.preventDefault();
-          const id = document.getElementById('announcement-id').value;
+          const id = (document.getElementById('announcement-id') as HTMLInputElement).value;
           const data = {
-            title: document.getElementById('announcement-title').value,
-            message: document.getElementById('announcement-message').value,
-            type: document.getElementById('announcement-type').value,
-            isActive: parseInt(document.getElementById('announcement-status').value),
-            url: document.getElementById('announcement-url').value || null,
-            urlLabel: document.getElementById('announcement-url-label').value || null,
+            title: (document.getElementById('announcement-title') as HTMLInputElement).value,
+            message: (document.getElementById('announcement-message') as HTMLInputElement).value,
+            type: (document.getElementById('announcement-type') as HTMLSelectElement).value,
+            isActive: parseInt((document.getElementById('announcement-status') as HTMLSelectElement).value),
+            url: (document.getElementById('announcement-url') as HTMLInputElement).value || null,
+            urlLabel: (document.getElementById('announcement-url-label') as HTMLInputElement).value || null,
           };
           try {
             if (id) {
@@ -758,7 +762,7 @@ const displayUrl = siteUrl.replace(/^https?:\/\//, '');
               await api.createAdminAnnouncement(data);
               showToast('Announcement created', 'success');
             }
-            document.getElementById('announcement-form-container').style.display = 'none';
+            document.getElementById('announcement-form-container')!.style.display = 'none';
             loadAnnouncements();
           } catch (err: any) {
             showToast(err.message || 'Failed to save announcement', 'error');
