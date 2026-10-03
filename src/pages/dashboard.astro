@@ -324,7 +324,7 @@ const isAdmin = userId === ADMIN_USER_ID || userId === CLERK_ADMIN_USER_ID;
             const storageText = document.getElementById("storage-used-text");
             if (storagePill && storageText) {
               const formatBytes = (bytes: number) => {
-                if (!+bytes) return '0 B';
+                if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 B';
                 const k = 1024;
                 const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
                 const i = Math.floor(Math.log(bytes) / Math.log(k));
