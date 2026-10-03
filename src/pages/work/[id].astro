@@ -2,6 +2,7 @@
 import Layout from '../../Layouts/Layout.astro'
 import ZoomPan from '../../components/ZoomPan.astro'
 import { NotebookIsland } from '../../components/NotebookIsland';
+import { DocumentIsland } from '../../components/DocumentIsland';
 
 const { userId } = Astro.locals.auth();
 if (!userId) {
@@ -132,6 +133,10 @@ const { id } = Astro.params;
         <div id="preview-notebook-container" class="hidden w-full h-full overflow-y-auto">
           <NotebookIsland client:load />
         </div>
+        
+        <div id="preview-document-container" class="hidden w-full h-full overflow-hidden">
+          <DocumentIsland client:load />
+        </div>
       </div>
     </div>
 
@@ -169,8 +174,9 @@ const { id } = Astro.params;
         subjectLink.href = `/subject/${work.subject_id}`;
         subjectLink.textContent = work.subject_name;
 
-        const textExts = new Set(['ipynb','py','js','mjs','cjs','jsx','ts','tsx','c','cpp','h','hpp','java','kt','cs','go','rs','swift','php','rb','r','scala','sql','html','css','scss','json','yaml','yml','xml','md','txt','csv','env','sh','bat','ps1','toml','ini','cfg','conf','log','dockerfile','tex','rtf']);
+        const textExts = new Set(['ipynb','py','js','mjs','cjs','jsx','ts','tsx','c','cpp','h','hpp','java','kt','cs','go','rs','swift','php','rb','r','scala','sql','html','css','scss','json','yaml','yml','xml','md','txt','env','sh','bat','ps1','toml','ini','cfg','conf','log','dockerfile','tex','rtf']);
         const imageExts = new Set(['jpg', 'jpeg', 'png', 'webp', 'svg', 'gif']);
+        const documentExts = new Set(['pdf', 'docx', 'xlsx', 'xls', 'csv']);
 
         const langMap: Record<string, string> = {
           py: 'python', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
@@ -214,12 +220,13 @@ const { id } = Astro.params;
           list.innerHTML = files.map((file: any) => {
             const isText = textExts.has(file.extension);
             const isImage = imageExts.has(file.extension);
-            const isPreviewable = isText || isImage;
+            const isDoc = documentExts.has(file.extension);
+            const isPreviewable = isText || isImage || isDoc;
             return `
               <div class="store-utility-card animate-fade-in mb-4 px-6 py-4">
                 <div class="flex items-center justify-between flex-wrap gap-4">
                   <div class="flex items-center gap-4 min-w-0" style="flex: 1 1 200px;">
-                    <span class="text-display-lg text-muted">${isImage ? '<i class="bi bi-image"></i>' : isText ? '<i class="bi bi-file-earmark-code"></i>' : '<i class="bi bi-box"></i>'}</span>
+                    <span class="text-display-lg text-muted">${isImage ? '<i class="bi bi-image"></i>' : isText ? '<i class="bi bi-file-earmark-code"></i>' : isDoc ? '<i class="bi bi-file-earmark-text"></i>' : '<i class="bi bi-box"></i>'}</span>
                     <div class="min-w-0">
                       <div class="text-body-strong truncate">${file.filename}</div>
                       <div class="flex gap-4 items-center text-caption text-muted mt-1 flex-wrap">
@@ -279,13 +286,16 @@ const { id } = Astro.params;
           const zoomContainer = document.getElementById('preview-zoom-container') as any;
           const zoomSlot = document.getElementById('preview-zoom-slot-content')!;
           const notebookContainer = document.getElementById('preview-notebook-container')!;
+          const documentContainer = document.getElementById('preview-document-container')!;
           
           defaultContent.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
           defaultContent.classList.remove('hidden');
           zoomContainer.classList.add('hidden');
           zoomSlot.innerHTML = '';
           notebookContainer.classList.add('hidden');
+          documentContainer.classList.add('hidden');
           window.dispatchEvent(new Event('clear-notebook'));
+          window.dispatchEvent(new Event('clear-document'));
           
           if (zoomContainer.resetState) zoomContainer.resetState();
 
@@ -304,6 +314,37 @@ const { id } = Astro.params;
               defaultContent.classList.remove('hidden');
               zoomContainer.classList.add('hidden');
               defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load image</p></div>`;
+            }
+            return;
+          }
+
+          if (documentExts.has(ext)) {
+            try {
+              const blob = await api.downloadFile(fileId);
+              document.getElementById('preview-size')!.textContent = formatSize(blob.size);
+              currentObjectUrl = URL.createObjectURL(blob);
+              
+              if (ext === 'pdf') {
+                defaultContent.classList.add('hidden');
+                zoomContainer.classList.add('hidden');
+                notebookContainer.classList.add('hidden');
+                documentContainer.classList.add('hidden');
+                
+                defaultContent.classList.remove('hidden');
+                defaultContent.innerHTML = `<iframe src="${currentObjectUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+              } else {
+                defaultContent.classList.add('hidden');
+                zoomContainer.classList.add('hidden');
+                notebookContainer.classList.add('hidden');
+                documentContainer.classList.remove('hidden');
+                window.dispatchEvent(new CustomEvent('preview-document', { detail: { objectUrl: currentObjectUrl, extension: ext } }));
+              }
+            } catch (err: any) {
+              defaultContent.classList.remove('hidden');
+              zoomContainer.classList.add('hidden');
+              notebookContainer.classList.add('hidden');
+              documentContainer.classList.add('hidden');
+              defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load document</p></div>`;
             }
             return;
           }
@@ -348,6 +389,7 @@ const { id } = Astro.params;
             defaultContent.classList.remove('hidden');
             zoomContainer.classList.add('hidden');
             notebookContainer.classList.add('hidden');
+            documentContainer.classList.add('hidden');
             defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load preview</p></div>`;
           }
         }

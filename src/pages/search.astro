@@ -2,6 +2,7 @@
 import Layout from "../Layouts/Layout.astro";
 import ZoomPan from "../components/ZoomPan.astro";
 import { NotebookIsland } from "../components/NotebookIsland";
+import { DocumentIsland } from "../components/DocumentIsland";
 
 const { userId } = Astro.locals.auth();
 if (!userId) {
@@ -105,6 +106,10 @@ if (!userId) {
         <div id="search-preview-notebook-container" class="hidden w-full h-full overflow-y-auto">
           <NotebookIsland client:only="react" />
         </div>
+        
+        <div id="search-preview-document-container" class="hidden w-full h-full overflow-hidden">
+          <DocumentIsland client:only="react" />
+        </div>
       </div>
     </div>
 
@@ -115,8 +120,9 @@ if (!userId) {
         const downloadBlob = (window as any).__labrepo_downloadBlob;
         const formatSize = (window as any).__labrepo_formatSize;
         const formatRelativeTime = (window as any).__labrepo_formatRelativeTime;
-        const textExts = new Set(['ipynb','py','js','mjs','cjs','jsx','ts','tsx','c','cpp','h','hpp','java','kt','cs','go','rs','swift','php','rb','r','scala','sql','html','css','scss','json','yaml','yml','xml','md','txt','csv','env','sh','bat','ps1','toml','ini','cfg','conf','log','dockerfile','tex','rtf']);
+        const textExts = new Set(['ipynb','py','js','mjs','cjs','jsx','ts','tsx','c','cpp','h','hpp','java','kt','cs','go','rs','swift','php','rb','r','scala','sql','html','css','scss','json','yaml','yml','xml','md','txt','env','sh','bat','ps1','toml','ini','cfg','conf','log','dockerfile','tex','rtf']);
         const imageExts = new Set(['png','jpg','jpeg','gif','webp','svg','ico']);
+        const documentExts = new Set(['pdf', 'docx', 'xlsx', 'xls', 'csv']);
         const langMap: Record<string, string> = {
           py: 'python', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
           c: 'c', h: 'c', hpp: 'cpp', cpp: 'cpp', java: 'java', kt: 'kotlin', cs: 'csharp', go: 'go', rs: 'rust', swift: 'swift', php: 'php', rb: 'ruby', r: 'r', scala: 'scala', sql: 'sql',
@@ -224,12 +230,13 @@ if (!userId) {
                 (file: any) => {
                   const isText = textExts.has(file.extension);
                   const isImage = imageExts.has(file.extension);
-                  const isPreviewable = isText || isImage;
+                  const isDoc = documentExts.has(file.extension);
+                  const isPreviewable = isText || isImage || isDoc;
                   return `
               <div class="search-result store-utility-card animate-fade-in mb-4">
                 <a href="/work/${file.work_id}" class="search-result__details">
                   <div class="flex items-center gap-4 min-w-0">
-                    <span class="text-display-lg text-muted"><i class="bi bi-file-earmark-text"></i></span>
+                    <span class="text-display-lg text-muted">${isImage ? '<i class="bi bi-image"></i>' : isText ? '<i class="bi bi-file-earmark-code"></i>' : isDoc ? '<i class="bi bi-file-earmark-text"></i>' : '<i class="bi bi-box"></i>'}</span>
                     <div class="min-w-0">
                       <div class="text-body-strong text-ink">${file.filename}</div>
                       <div class="text-caption text-muted truncate">
@@ -314,13 +321,16 @@ if (!userId) {
           const zoomContainer = document.getElementById("search-preview-zoom-container") as any;
           const zoomSlot = document.getElementById("search-preview-zoom-slot-content")!;
           const notebookContainer = document.getElementById("search-preview-notebook-container")!;
+          const documentContainer = document.getElementById("search-preview-document-container")!;
           
           defaultContent.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
           defaultContent.classList.remove('hidden');
           zoomContainer.classList.add('hidden');
           zoomSlot.innerHTML = '';
           notebookContainer.classList.add('hidden');
+          documentContainer.classList.add('hidden');
           window.dispatchEvent(new Event('clear-notebook'));
+          window.dispatchEvent(new Event('clear-document'));
           
           if (zoomContainer.resetState) zoomContainer.resetState();
 
@@ -339,6 +349,37 @@ if (!userId) {
               defaultContent.classList.remove('hidden');
               zoomContainer.classList.add('hidden');
               defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load image</p></div>`;
+            }
+            return;
+          }
+
+          if (documentExts.has(extension)) {
+            try {
+              const blob = await api.downloadFile(fileId);
+              document.getElementById("search-preview-size")!.textContent = formatSize(blob.size);
+              currentObjectUrl = URL.createObjectURL(blob);
+              
+              if (extension === 'pdf') {
+                defaultContent.classList.add('hidden');
+                zoomContainer.classList.add('hidden');
+                notebookContainer.classList.add('hidden');
+                documentContainer.classList.add('hidden');
+                
+                defaultContent.classList.remove('hidden');
+                defaultContent.innerHTML = `<iframe src="${currentObjectUrl}" style="width: 100%; height: 100%; border: none;"></iframe>`;
+              } else {
+                defaultContent.classList.add('hidden');
+                zoomContainer.classList.add('hidden');
+                notebookContainer.classList.add('hidden');
+                documentContainer.classList.remove('hidden');
+                window.dispatchEvent(new CustomEvent('preview-document', { detail: { objectUrl: currentObjectUrl, extension } }));
+              }
+            } catch (err: any) {
+              defaultContent.classList.remove('hidden');
+              zoomContainer.classList.add('hidden');
+              notebookContainer.classList.add('hidden');
+              documentContainer.classList.add('hidden');
+              defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load document</p></div>`;
             }
             return;
           }
@@ -376,6 +417,7 @@ if (!userId) {
             defaultContent.classList.remove('hidden');
             zoomContainer.classList.add('hidden');
             notebookContainer.classList.add('hidden');
+            documentContainer.classList.add('hidden');
             defaultContent.innerHTML = '<div class="empty-state"><p style="color: var(--color-danger);">Failed to load preview</p></div>';
           }
         }

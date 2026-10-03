@@ -23,12 +23,14 @@
     "astro-icon": "^1.1.5",
     "clsx": "^2.1.1",
     "framer-motion": "^12.43.0",
+    "mammoth": "^1.13.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^4.3.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",

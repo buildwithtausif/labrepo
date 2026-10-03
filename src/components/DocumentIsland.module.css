@@ -1,0 +1,52 @@
+.documentContainer {
+  width: 100%;
+  height: 100%;
+  padding: 2rem;
+  background: var(--color-canvas);
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.documentPaper {
+  background: white;
+  color: black;
+  width: 100%;
+  max-width: 850px;
+  min-height: 100%;
+  padding: 4rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-radius: 4px;
+}
+
+:global(.dark) .documentPaper {
+  background: #1e1e24;
+  color: #c9d1d9;
+}
+
+.documentPaper :global(table.xlsx-table) {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+
+.documentPaper :global(table.xlsx-table td),
+.documentPaper :global(table.xlsx-table th) {
+  border: 1px solid #d0d7de;
+  padding: 6px 12px;
+}
+
+:global(.dark) .documentPaper :global(table.xlsx-table td),
+:global(.dark) .documentPaper :global(table.xlsx-table th) {
+  border-color: #30363d;
+}
+
+.documentPaper :global(p) {
+  margin-bottom: 1rem;
+}
+.documentPaper :global(h1), 
+.documentPaper :global(h2), 
+.documentPaper :global(h3) {
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+}
