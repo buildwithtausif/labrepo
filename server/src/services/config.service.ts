@@ -13,7 +13,8 @@ const DEFAULT_ALLOWED_EXTENSIONS = [
   'scss', 'json', 'yaml', 'yml', 'xml', 'md', 'txt', 'csv', 'parquet',
   'feather', 'pkl', 'joblib', 'onnx', 'pt', 'pth', 'keras', 'h5',
   'env', 'sh', 'bat', 'ps1', 'toml', 'ini', 'cfg', 'conf', 'log', 'dockerfile',
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'tex',
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'tex','png','jpg','jpeg','webp',
+  'svg','ico','penpot','psd'
 ];
 
 function parseNumberEnv(name: string, fallback: number): number {
