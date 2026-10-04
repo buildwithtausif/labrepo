@@ -1,2 +1,2 @@
-import { FastifyInstance } from 'fastify';
-export declare function publicRoutes(fastify: FastifyInstance): Promise<void>;
+import type { StorageAdapter } from '../storage/adapter.js';
+export declare function createPublicRoutes(fallbackStorage: StorageAdapter): import("express-serve-static-core").Router;

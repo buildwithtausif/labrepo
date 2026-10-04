@@ -403,7 +403,7 @@ if (!userId) {
                 mp4: 'video/mp4', webm: 'video/webm', ogg: 'video/ogg', mp3: 'audio/mpeg'
               };
               
-              (window as any).currentSearchVideoPlayer = videojs(videoEl, {
+              (window as any).currentSearchVideoPlayer = videojs(videoEl!, {
                 controls: true,
                 fluid: false,
                 responsive: true,

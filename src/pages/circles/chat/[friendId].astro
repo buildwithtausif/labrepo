@@ -1,0 +1,355 @@
+---
+import Layout from "../../../Layouts/Layout.astro";
+
+const { userId } = Astro.locals.auth();
+if (!userId) {
+  return Astro.redirect("/");
+}
+
+const { friendId } = Astro.params;
+---
+
+<Layout title="Circles - Chat">
+  <div class="chat-wrapper">
+    <div class="chat-header">
+      <a href="/circles" class="btn btn--ghost btn--sm back-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+      </a>
+      <div class="chat-header-info">
+        <h2 id="chat-friend-name">Loading...</h2>
+        <span class="status-indicator">E2E Encrypted</span>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="messages-container">
+      <div class="empty-state">Initializing secure connection...</div>
+    </div>
+
+    <div class="chat-input-area">
+      <form id="chat-form" class="chat-form">
+        <div class="input-wrapper">
+          <input type="text" id="message-input" class="chat-input" placeholder="Message..." autocomplete="off" disabled />
+          <button type="button" class="btn btn--ghost attachment-btn" id="upload-btn" title="Send a file">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+          </button>
+          <input type="file" id="file-input" style="display:none;" />
+        </div>
+        
+        <button type="submit" class="btn btn--primary send-btn" id="send-btn" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 2px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+      </form>
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .chat-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 64px); /* Changed to dvh for mobile */
+    background: var(--color-surface-tile);
+    color: var(--color-ink);
+  }
+
+  .chat-header {
+    height: 60px;
+    background: var(--color-surface-pearl);
+    border-bottom: 1px solid var(--color-divider);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+  }
+
+  .chat-header-info h2 {
+    font-size: 1.1rem;
+    margin: 0;
+  }
+  
+  .status-indicator {
+    font-size: 0.75rem;
+    color: var(--color-success);
+    font-weight: 700;
+  }
+
+  .chat-messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .message {
+    max-width: 70%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    line-height: 1.4;
+  }
+
+  .message.sent {
+    align-self: flex-end;
+    background: var(--color-primary);
+    color: white;
+    border-bottom-right-radius: 2px;
+  }
+
+  .message.received {
+    align-self: flex-start;
+    background: var(--color-surface-pearl);
+    border: 1px solid var(--color-divider);
+    border-bottom-left-radius: 2px;
+  }
+
+  .chat-input-area {
+    padding: 12px 16px;
+    background: transparent;
+    border-top: none;
+    position: sticky;
+    bottom: 0;
+    width: 100%;
+  }
+
+  .chat-form {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+
+  .input-wrapper {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    background: var(--color-surface-pearl);
+    border-radius: 24px;
+    padding: 4px 8px 4px 16px;
+    border: 1px solid var(--color-divider);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+
+  .chat-input {
+    flex-grow: 1;
+    background: transparent;
+    border: none;
+    padding: 10px 0px;
+    color: var(--color-ink);
+    outline: none;
+    font-size: 0.95rem;
+  }
+
+  .chat-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .attachment-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    color: var(--color-ink-muted);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  
+  .send-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    padding: 0;
+  }
+</style>
+
+<script>
+  // E2E Encryption Logic using Web Crypto API
+  
+  function arrayBufferToBase64(buffer: ArrayBuffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+  }
+
+  function base64ToArrayBuffer(base64: string) {
+    const binary_string = window.atob(base64);
+    const len = binary_string.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary_string.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  const FRIEND_ID = window.location.pathname.split('/').pop();
+  let myKeyPair: CryptoKeyPair;
+  let sharedSecretKey: CryptoKey;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const msgsContainer = document.getElementById('messages-container');
+    const msgInput = document.getElementById('message-input') as HTMLInputElement;
+    const sendBtn = document.getElementById('send-btn') as HTMLButtonElement;
+    const form = document.getElementById('chat-form');
+
+    function startChat() {
+      initE2E().then(() => {
+        msgsContainer!.innerHTML = ''; // Clear loading
+        return fetchHistory();
+      }).then(() => {
+        connectSSE();
+        msgInput.disabled = false;
+        sendBtn.disabled = false;
+      }).catch((err: any) => {
+        console.error('E2E Init failed:', err);
+        if (err.message === 'Friend_Key_Missing') {
+          msgsContainer!.innerHTML = '<div class="empty-state text-muted">Waiting for friend to join Circles to establish a secure connection...</div>';
+        } else {
+          msgsContainer!.innerHTML = '<div class="empty-state text-error">Failed to establish secure connection.</div>';
+        }
+      });
+    }
+
+    if (window.Clerk && window.Clerk.isReady) {
+      startChat();
+    } else {
+      window.addEventListener('load', () => setTimeout(startChat, 1000));
+    }
+
+    async function initE2E() {
+      const e2e = await import('../../../scripts/e2e');
+      
+      const keyPair = await e2e.getOrGenerateKeyPair();
+      if (!keyPair) throw new Error('Failed to load local key pair');
+      myKeyPair = keyPair;
+
+      const token = await window.Clerk?.session?.getToken();
+      
+      // Fetch friend's public key
+      const res = await fetch(`${window.API_BASE_URL || ''}/api/keys/${FRIEND_ID}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Friend_Key_Missing');
+      const { publicKey: friendPubBase64 } = await res.json();
+      
+      const friendPubBuffer = base64ToArrayBuffer(friendPubBase64);
+      const friendPubKey = await window.crypto.subtle.importKey(
+        "spki",
+        friendPubBuffer,
+        { name: "ECDH", namedCurve: "P-256" },
+        true,
+        []
+      );
+
+      // Derive shared AES-GCM key
+      sharedSecretKey = await window.crypto.subtle.deriveKey(
+        { name: "ECDH", public: friendPubKey },
+        myKeyPair.privateKey,
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+      );
+    }
+
+    async function encryptMessage(text: string) {
+      const enc = new TextEncoder();
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      const cipherBuffer = await window.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        sharedSecretKey,
+        enc.encode(text)
+      );
+      return {
+        encryptedContent: arrayBufferToBase64(cipherBuffer),
+        iv: arrayBufferToBase64(iv)
+      };
+    }
+
+    async function decryptMessage(encryptedContent: string, ivStr: string) {
+      try {
+        const cipherBuffer = base64ToArrayBuffer(encryptedContent);
+        const iv = base64ToArrayBuffer(ivStr);
+        const decryptedBuffer = await window.crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: new Uint8Array(iv) },
+          sharedSecretKey,
+          cipherBuffer
+        );
+        const dec = new TextDecoder();
+        return dec.decode(decryptedBuffer);
+      } catch (e) {
+        return "[Decryption Failed]";
+      }
+    }
+
+    async function fetchHistory() {
+      const token = await window.Clerk?.session?.getToken();
+      const res = await fetch(`${window.API_BASE_URL || ''}/api/messages/${FRIEND_ID}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const { messages } = await res.json();
+        for (const msg of messages) {
+          const plain = await decryptMessage(msg.encryptedContent, msg.iv);
+          appendMessage(plain, msg.senderId !== FRIEND_ID);
+        }
+      }
+    }
+
+    function connectSSE() {
+      window.addEventListener('circles:new_message', async (e: any) => {
+        const msg = e.detail;
+        if (msg.senderId === FRIEND_ID || msg.receiverId === FRIEND_ID) {
+           // Ensure it's not a duplicate if we just sent it (could check by ID in real app)
+           const plain = await decryptMessage(msg.encryptedContent, msg.iv);
+           appendMessage(plain, msg.senderId !== FRIEND_ID);
+        }
+      });
+      
+      window.addEventListener('socket:connected', () => {
+        // Handle reconnection
+        msgsContainer!.innerHTML = '';
+        fetchHistory();
+      });
+    }
+
+    function appendMessage(text: string, isSent: boolean) {
+      const div = document.createElement('div');
+      div.className = `message ${isSent ? 'sent' : 'received'}`;
+      div.textContent = text;
+      msgsContainer?.appendChild(div);
+      msgsContainer!.scrollTop = msgsContainer!.scrollHeight;
+    }
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = msgInput.value.trim();
+      if (!text) return;
+      
+      msgInput.value = '';
+      const { encryptedContent, iv } = await encryptMessage(text);
+      
+      const token = await window.Clerk?.session?.getToken();
+      await fetch(`${window.API_BASE_URL || ''}/api/messages/${FRIEND_ID}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ encryptedContent, iv })
+      });
+      
+      // We append locally since we sent it
+      appendMessage(text, true);
+    });
+
+  });
+</script>

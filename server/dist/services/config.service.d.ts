@@ -1,6 +1,5 @@
 export interface SecurityConfig {
     maxUploadBytes: number;
-    maxStoragePerUserBytes: number;
     loginRateLimit: number;
     uploadRateLimit: number;
     maxRepositories: number;

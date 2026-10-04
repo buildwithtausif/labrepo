@@ -10,6 +10,11 @@ export const users = pgTable('users', {
     uploadsSuspended: integer('uploads_suspended').notNull().default(0),
     suspensionReason: text('suspension_reason'),
     allowedExtensions: text('allowed_extensions'),
+    gdriveRefreshToken: text('gdrive_refresh_token'),
+    gdriveConnectedAt: text('gdrive_connected_at'),
+    gdriveEmail: text('gdrive_email'),
+    bio: text('bio'),
+    requireUploadApproval: integer('require_upload_approval').notNull().default(0),
     createdAt: text('created_at').notNull().default(nowIso),
     updatedAt: text('updated_at').notNull().default(nowIso),
 });
@@ -168,4 +173,53 @@ export const announcements = pgTable('announcements', {
 }, (table) => [
     index('idx_announcements_active').on(table.isActive),
     check('announcements_type_check', sql `${table.type} IN ('info', 'success', 'warning', 'critical')`),
+]);
+// ─── Friendships (Circles) ────────────────────────────
+export const friendships = pgTable('friendships', {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    requesterId: text('requester_id').notNull(),
+    receiverId: text('receiver_id').notNull(),
+    status: text('status').notNull().default('pending'), // pending, accepted, rejected, blocked
+    createdAt: text('created_at').notNull().default(nowIso),
+    updatedAt: text('updated_at').notNull().default(nowIso),
+}, (table) => [
+    index('idx_friendships_requester').on(table.requesterId),
+    index('idx_friendships_receiver').on(table.receiverId),
+    index('idx_friendships_status').on(table.status),
+    check('friendships_status_check', sql `${table.status} IN ('pending', 'accepted', 'rejected', 'blocked')`),
+]);
+// ─── Shared Files (Circles) ───────────────────────────
+export const sharedFiles = pgTable('shared_files', {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    fileId: integer('file_id')
+        .notNull()
+        .references(() => files.id, { onDelete: 'cascade' }),
+    senderId: text('sender_id').notNull(),
+    receiverId: text('receiver_id').notNull(),
+    createdAt: text('created_at').notNull().default(nowIso),
+}, (table) => [
+    index('idx_shared_files_sender').on(table.senderId),
+    index('idx_shared_files_receiver').on(table.receiverId),
+    index('idx_shared_files_file').on(table.fileId),
+]);
+// ─── User Keys (Circles E2E) ──────────────────────────
+export const userKeys = pgTable('user_keys', {
+    userId: text('user_id').primaryKey(),
+    publicKey: text('public_key').notNull(),
+    updatedAt: text('updated_at').notNull().default(nowIso),
+});
+// ─── Messages (Circles) ───────────────────────────────
+export const messages = pgTable('messages', {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    senderId: text('sender_id').notNull(),
+    receiverId: text('receiver_id').notNull(),
+    encryptedContent: text('encrypted_content').notNull(),
+    iv: text('iv').notNull(),
+    sharedFileId: integer('shared_file_id').references(() => sharedFiles.id, { onDelete: 'set null' }),
+    isRead: integer('is_read').notNull().default(0),
+    createdAt: text('created_at').notNull().default(nowIso),
+}, (table) => [
+    index('idx_messages_sender').on(table.senderId),
+    index('idx_messages_receiver').on(table.receiverId),
+    index('idx_messages_created').on(table.createdAt),
 ]);

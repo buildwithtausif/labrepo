@@ -22,7 +22,10 @@ export const clerkAuthMiddleware = async (req: Request, res: Response, next: Nex
   // For browser-redirect routes (e.g. GDrive OAuth), accept token from query param
   const queryToken = req.query.token as string | undefined;
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-  const token = bearerToken || queryToken;
+  let token = bearerToken || queryToken;
+  if (token === 'null' || token === 'undefined') {
+    token = undefined;
+  }
 
   const isDevMode = process.env.ENV?.trim() === 'development' || process.env.NODE_ENV === 'development';
 

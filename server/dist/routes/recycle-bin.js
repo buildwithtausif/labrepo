@@ -1,104 +1,24 @@
+import { Router } from 'express';
 import { getDb } from '../db/runtime.js';
 import { recycleBin, academicSessions, subjects, works } from '../db/schema.js';
 import { updateUserUsage } from '../services/usage.service.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { requireNotSuspended } from '../auth/suspension.js';
-export function createRecycleBinRoutes(storage) {
-    return async function recycleBinRoutes(fastify) {
-        // List recycle bin items
-        fastify.get('/api/recycle-bin', async (request) => {
-            const db = getDb();
-            const items = await db
-                .select()
-                .from(recycleBin)
-                .where(eq(recycleBin.userId, request.userId))
-                .orderBy(sql `${recycleBin.deletedAt} DESC`);
-            const now = Date.now();
-            const enriched = items.map((item) => {
-                const expiresAt = new Date(item.expiresAt).getTime();
-                const remainingMs = Math.max(0, expiresAt - now);
-                const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
-                let data;
-                try {
-                    data = JSON.parse(item.originalData);
-                }
-                catch {
-                    data = {};
-                }
-                let name = 'Unknown item';
-                if (item.itemType === 'session' && data.session)
-                    name = data.session.name;
-                else if (item.itemType === 'subject' && data.subject)
-                    name = data.subject.name;
-                else if (item.itemType === 'work' && data.work)
-                    name = data.work.title;
-                else if (item.itemType === 'file' && data.file)
-                    name = data.file.filename;
-                return {
-                    id: item.id,
-                    item_type: item.itemType,
-                    item_id: item.itemId,
-                    name,
-                    deleted_at: item.deletedAt,
-                    expires_at: item.expiresAt,
-                    remaining_days: remainingDays,
-                };
-            });
-            return { items: enriched };
-        });
-        // Restore item from recycle bin
-        fastify.post('/api/recycle-bin/:id/restore', async (request, reply) => {
-            if (await requireNotSuspended(request, reply))
-                return;
-            const db = getDb();
-            const [item] = await db
-                .select()
-                .from(recycleBin)
-                .where(and(eq(recycleBin.id, Number(request.params.id)), eq(recycleBin.userId, request.userId)))
-                .limit(1);
-            if (!item) {
-                return reply.status(404).send({ error: 'Recycle bin item not found' });
-            }
-            let data;
-            try {
-                data = JSON.parse(item.originalData);
-            }
-            catch {
-                return reply.status(500).send({ error: 'Could not parse item data' });
-            }
-            await db.transaction(async (tx) => {
-                switch (item.itemType) {
-                    case 'session':
-                        await restoreSession(tx, data);
-                        break;
-                    case 'subject':
-                        await restoreSubject(tx, data);
-                        break;
-                    case 'work':
-                        await restoreWork(tx, data);
-                        break;
-                    case 'file':
-                        await restoreFile(tx, data);
-                        break;
-                }
-                await updateUserUsage({ userId: request.userId, timestamp: new Date().toISOString() });
-                await tx.delete(recycleBin).where(eq(recycleBin.id, item.id));
-            });
-            return { success: true, message: `${item.itemType} restored successfully` };
-        });
-        // Permanently delete from recycle bin
-        fastify.delete('/api/recycle-bin/:id', async (request, reply) => {
-            if (await requireNotSuspended(request, reply))
-                return;
-            const db = getDb();
-            const [item] = await db
-                .select()
-                .from(recycleBin)
-                .where(and(eq(recycleBin.id, Number(request.params.id)), eq(recycleBin.userId, request.userId)))
-                .limit(1);
-            if (!item) {
-                return reply.status(404).send({ error: 'Recycle bin item not found' });
-            }
+import { requireNotSuspendedMiddleware } from '../auth/suspension.js';
+export function createRecycleBinRoutes(resolveStorage) {
+    const router = Router();
+    // List recycle bin items
+    router.get('/api/recycle-bin', async (req, res) => {
+        const db = getDb();
+        const items = await db
+            .select()
+            .from(recycleBin)
+            .where(eq(recycleBin.userId, req.userId))
+            .orderBy(sql `${recycleBin.deletedAt} DESC`);
+        const now = Date.now();
+        const enriched = items.map((item) => {
+            const expiresAt = new Date(item.expiresAt).getTime();
+            const remainingMs = Math.max(0, expiresAt - now);
+            const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
             let data;
             try {
                 data = JSON.parse(item.originalData);
@@ -106,36 +26,126 @@ export function createRecycleBinRoutes(storage) {
             catch {
                 data = {};
             }
-            const filesToDelete = extractFiles(item.itemType, data);
-            let storageDelta = 0;
-            let fileDelta = 0;
-            for (const file of filesToDelete) {
-                try {
-                    await storage.delete(file.storageKey || file.storage_key);
-                    storageDelta -= (file.sizeBytes || file.size_bytes || 0);
-                    fileDelta -= 1;
-                }
-                catch (error) {
-                    console.error(`Failed to delete file from storage: ${file.storageKey || file.storage_key}`, error);
-                    storageDelta -= (file.sizeBytes || file.size_bytes || 0);
-                    fileDelta -= 1;
-                }
-            }
-            await db.delete(recycleBin).where(eq(recycleBin.id, item.id));
-            if (storageDelta < 0 || fileDelta < 0) {
-                await updateUserUsage({
-                    userId: request.userId,
-                    storageDelta,
-                    fileDelta,
-                });
-            }
-            return { success: true, message: 'Permanently deleted' };
+            let name = 'Unknown item';
+            if (item.itemType === 'session' && data.session)
+                name = data.session.name;
+            else if (item.itemType === 'subject' && data.subject)
+                name = data.subject.name;
+            else if (item.itemType === 'work' && data.work)
+                name = data.work.title;
+            else if (item.itemType === 'file' && data.file)
+                name = data.file.filename;
+            return {
+                id: item.id,
+                item_type: item.itemType,
+                item_id: item.itemId,
+                name,
+                deleted_at: item.deletedAt,
+                expires_at: item.expiresAt,
+                remaining_days: remainingDays,
+            };
         });
-    };
+        res.json({ items: enriched });
+    });
+    // Restore item from recycle bin
+    router.post('/api/recycle-bin/:id/restore', requireNotSuspendedMiddleware, async (req, res) => {
+        const db = getDb();
+        const [item] = await db
+            .select()
+            .from(recycleBin)
+            .where(and(eq(recycleBin.id, Number(req.params.id)), eq(recycleBin.userId, req.userId)))
+            .limit(1);
+        if (!item) {
+            res.status(404).json({ error: 'Recycle bin item not found' });
+            return;
+        }
+        let data;
+        try {
+            data = JSON.parse(item.originalData);
+        }
+        catch {
+            res.status(500).json({ error: 'Could not parse item data' });
+            return;
+        }
+        await db.transaction(async (tx) => {
+            switch (item.itemType) {
+                case 'session':
+                    await restoreSession(tx, data);
+                    break;
+                case 'subject':
+                    await restoreSubject(tx, data);
+                    break;
+                case 'work':
+                    await restoreWork(tx, data);
+                    break;
+                case 'file':
+                    await restoreFile(tx, data);
+                    break;
+            }
+            await updateUserUsage({ userId: req.userId, timestamp: new Date().toISOString() });
+            await tx.delete(recycleBin).where(eq(recycleBin.id, item.id));
+        });
+        res.json({ success: true, message: `${item.itemType} restored successfully` });
+    });
+    // Permanently delete from recycle bin
+    router.delete('/api/recycle-bin/:id', requireNotSuspendedMiddleware, async (req, res) => {
+        const db = getDb();
+        const [item] = await db
+            .select()
+            .from(recycleBin)
+            .where(and(eq(recycleBin.id, Number(req.params.id)), eq(recycleBin.userId, req.userId)))
+            .limit(1);
+        if (!item) {
+            res.status(404).json({ error: 'Recycle bin item not found' });
+            return;
+        }
+        let data;
+        try {
+            data = JSON.parse(item.originalData);
+        }
+        catch {
+            data = {};
+        }
+        const filesToDelete = extractFiles(item.itemType, data);
+        let storageDelta = 0;
+        let fileDelta = 0;
+        let storage;
+        try {
+            storage = await resolveStorage(req.userId);
+        }
+        catch {
+            // If storage can't be resolved (e.g. Drive disconnected), still allow
+            // permanent delete from DB — the files are already orphaned.
+            storage = null;
+        }
+        for (const file of filesToDelete) {
+            try {
+                if (storage) {
+                    await storage.delete(file.storageKey || file.storage_key);
+                }
+                storageDelta -= (file.sizeBytes || file.size_bytes || 0);
+                fileDelta -= 1;
+            }
+            catch (error) {
+                console.error(`Failed to delete file from storage: ${file.storageKey || file.storage_key}`, error);
+                storageDelta -= (file.sizeBytes || file.size_bytes || 0);
+                fileDelta -= 1;
+            }
+        }
+        await db.delete(recycleBin).where(eq(recycleBin.id, item.id));
+        if (storageDelta < 0 || fileDelta < 0) {
+            await updateUserUsage({
+                userId: req.userId,
+                storageDelta,
+                fileDelta,
+            });
+        }
+        res.json({ success: true, message: 'Permanently deleted' });
+    });
+    return router;
 }
 async function restoreSession(tx, data) {
     const { session, subjects: subs, works: wks, files: fls } = data;
-    // Use sql for overriding identity column
     await tx.execute(sql `
     INSERT INTO academic_sessions (id, user_id, name, auto_delete, auto_delete_date, created_at, updated_at)
     OVERRIDING SYSTEM VALUE

@@ -1,54 +1,53 @@
 import { createClerkClient, verifyToken } from '@clerk/backend';
-import fp from 'fastify-plugin';
 export const clerkClient = createClerkClient({
-    secretKey: process.env.CLERK_SECRET_KEY,
+    secretKey: process.env.CLERK_SECRET_KEY || 'dummy_key',
 });
 const DEV_ADMIN_ID = process.env.ADMIN_USER_ID || process.env.CLERK_ADMIN_USER_ID || 'mock_dev_admin';
 const DEV_TEST_USER_ID = 'mock_test_user';
-/**
- * Clerk authentication plugin for Fastify.
- * Verifies JWT from the Authorization header and decorates the request with userId.
- */
-async function clerkAuthPlugin(fastify) {
-    fastify.decorateRequest('userId', '');
-    fastify.addHook('preHandler', async (request, reply) => {
-        // Skip auth for health check
-        if (request.url === '/health')
+export const clerkAuthMiddleware = async (req, res, next) => {
+    if (req.path === '/health' ||
+        req.path.startsWith('/api/announcements') ||
+        req.path.startsWith('/api/public') ||
+        req.path === '/api/auth/gdrive/callback') {
+        return next();
+    }
+    const authHeader = req.headers.authorization;
+    // For browser-redirect routes (e.g. GDrive OAuth), accept token from query param
+    const queryToken = req.query.token;
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    const token = bearerToken || queryToken;
+    const isDevMode = process.env.ENV?.trim() === 'development' || process.env.NODE_ENV === 'development';
+    if (!token) {
+        if (isDevMode) {
+            const cookieHeader = req.headers.cookie || '';
+            const match = cookieHeader.match(/devmode_role=(devadmin|testuser)/);
+            const role = match?.[1] || 'devadmin';
+            req.userId = role === 'testuser' ? DEV_TEST_USER_ID : DEV_ADMIN_ID;
+            return next();
+        }
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+    }
+    try {
+        if (isDevMode) {
+            const cookieHeader = req.headers.cookie || '';
+            const match = cookieHeader.match(/devmode_role=(devadmin|testuser)/);
+            const role = match?.[1] || 'devadmin';
+            req.userId = role === 'testuser' ? DEV_TEST_USER_ID : DEV_ADMIN_ID;
+            return next();
+        }
+        const payload = await verifyToken(token, {
+            secretKey: process.env.CLERK_SECRET_KEY,
+        });
+        if (!payload.sub) {
+            res.status(401).json({ error: 'Invalid token: no subject' });
             return;
-        const authHeader = request.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            if (process.env.ENV === 'development') {
-                // Read dev role from cookie forwarded by the frontend
-                const cookieHeader = request.headers.cookie || '';
-                const match = cookieHeader.match(/devmode_role=(devadmin|testuser)/);
-                const role = match?.[1] || 'devadmin';
-                request.userId = role === 'testuser' ? DEV_TEST_USER_ID : DEV_ADMIN_ID;
-                return;
-            }
-            return reply.status(401).send({ error: 'Authentication required' });
         }
-        const token = authHeader.substring(7);
-        try {
-            if (process.env.ENV === 'development') {
-                // In dev mode, still check the cookie even if a token is present
-                const cookieHeader = request.headers.cookie || '';
-                const match = cookieHeader.match(/devmode_role=(devadmin|testuser)/);
-                const role = match?.[1] || 'devadmin';
-                request.userId = role === 'testuser' ? DEV_TEST_USER_ID : DEV_ADMIN_ID;
-                return;
-            }
-            const payload = await verifyToken(token, {
-                secretKey: process.env.CLERK_SECRET_KEY,
-            });
-            if (!payload.sub) {
-                return reply.status(401).send({ error: 'Invalid token: no subject' });
-            }
-            request.userId = payload.sub;
-        }
-        catch (err) {
-            console.error('[clerkAuth] Token verification failed:', err);
-            return reply.status(401).send({ error: 'Invalid or expired token', details: err.message });
-        }
-    });
-}
-export const clerkAuth = fp(clerkAuthPlugin);
+        req.userId = payload.sub;
+        next();
+    }
+    catch (err) {
+        console.error('[clerkAuthMiddleware] Token verification failed:', err);
+        res.status(401).json({ error: 'Invalid or expired token', details: err.message });
+    }
+};

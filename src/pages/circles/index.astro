@@ -1,0 +1,799 @@
+---
+import Layout from "../../Layouts/Layout.astro";
+
+const { userId } = Astro.locals.auth();
+if (!userId) {
+  return Astro.redirect("/");
+}
+---
+
+<Layout title="Circles - Friends">
+  <div class="circles-wrapper">
+    <!-- Sidebar -->
+    <aside class="circles-sidebar">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">Circles</h2>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-tab="all">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span class="nav-text">Friends</span>
+        </button>
+        <button class="nav-item" data-tab="pending">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span class="nav-text">Pending</span>
+          <span class="badge" id="pending-badge" style="display:none">0</span>
+        </button>
+        <button class="nav-item discover-btn" data-tab="discover">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <span class="nav-text">Discover</span>
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <span class="nav-text">Settings</span>
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="circles-main">
+      <header class="main-header">
+        <h3 id="current-tab-title">All Friends</h3>
+      </header>
+      
+      <div class="main-content">
+        <!-- All Friends Tab -->
+        <div id="tab-all" class="tab-pane active">
+          <div class="search-filter">
+             <input type="text" id="filter-friends" placeholder="Search friends..." class="circles-input" />
+          </div>
+          <div class="list-header">ALL FRIENDS — <span id="friends-count">0</span></div>
+          <ul class="user-list" id="friend-list">
+            <li class="empty-state">Loading friends...</li>
+          </ul>
+        </div>
+
+        <!-- Pending Tab -->
+        <div id="tab-pending" class="tab-pane">
+          <div class="list-header">PENDING REQUESTS — <span id="pending-count">0</span></div>
+          <ul class="user-list" id="requests-list">
+            <li class="empty-state">No pending requests.</li>
+          </ul>
+        </div>
+
+        <!-- Discover Tab -->
+        <div id="tab-discover" class="tab-pane">
+          <div class="discover-hero">
+            <h2 class="discover-title">Add Friend</h2>
+            <p class="discover-subtitle">Find people on Labrepo</p>
+            <div class="search-box">
+              <input type="text" id="discover-input" class="circles-input" placeholder="Search for usernames..." autocomplete="off" />
+              <button class="btn btn--primary" id="discover-btn">Search</button>
+            </div>
+          </div>
+          <div class="list-header" id="discover-results-header">SUGGESTIONS</div>
+          <ul class="user-list" id="discover-list">
+            <li class="empty-state">Loading suggestions...</li>
+          </ul>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-pane">
+          <div class="settings-card">
+            <h2 class="discover-title">Your Profile</h2>
+            <p class="discover-subtitle">Add a bio so friends can identify you easily.</p>
+            <form id="bio-form" class="bio-form">
+              <div class="form-group">
+                <label for="bio-input" class="list-header" style="display:block; margin-bottom:8px;">BIO</label>
+                <textarea id="bio-input" class="circles-input" rows="3" placeholder="A short bio..."></textarea>
+              </div>
+              <button type="submit" class="btn btn--primary" id="save-bio-btn" style="margin-top: 16px;">Save Bio</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</Layout>
+
+<style>
+  .circles-wrapper {
+    display: flex;
+    height: calc(100vh - 64px); 
+    background: var(--color-canvas);
+    color: var(--color-ink);
+  }
+  
+  .circles-sidebar {
+    width: 280px;
+    background: var(--color-surface-pearl);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--color-divider);
+    transition: transform 0.3s ease;
+  }
+
+  .sidebar-header {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--color-divider);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+
+  .sidebar-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .sidebar-nav {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-ink-muted);
+    border: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .nav-item:hover {
+    background: rgba(255,255,255,0.05);
+    color: var(--color-ink);
+  }
+
+  .nav-item.active {
+    background: rgba(255,255,255,0.1);
+    color: var(--color-ink);
+  }
+
+  .nav-item.discover-btn {
+    color: var(--color-success);
+  }
+  .nav-item.discover-btn:hover {
+    background: rgba(73, 184, 122, 0.15);
+  }
+  .nav-item.discover-btn.active {
+    background: rgba(73, 184, 122, 0.2);
+  }
+
+  .badge {
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 12px;
+    margin-left: auto;
+    font-weight: 700;
+  }
+
+  .circles-main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface-tile);
+    overflow: hidden;
+  }
+
+  .main-header {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--color-divider);
+    background: var(--color-surface-pearl);
+    font-weight: 600;
+  }
+  
+  .main-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+
+  .main-content {
+    padding: 24px;
+    flex-grow: 1;
+    overflow-y: auto;
+  }
+
+  .tab-pane {
+    display: none;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .tab-pane.active {
+    display: block;
+  }
+
+  .list-header {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-ink-muted);
+    margin-bottom: 16px;
+    letter-spacing: 0.05em;
+  }
+
+  .circles-input {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: var(--color-canvas);
+    border: 1px solid var(--color-divider);
+    color: var(--color-ink);
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .circles-input:focus {
+    border-color: var(--color-primary);
+  }
+
+  .search-filter {
+    margin-bottom: 24px;
+  }
+
+  .discover-hero {
+    margin-bottom: 32px;
+  }
+  
+  .discover-title {
+    font-size: 1.5rem;
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+  
+  .discover-subtitle {
+    color: var(--color-ink-muted);
+    margin-bottom: 16px;
+    font-size: 0.95rem;
+  }
+  
+  .search-box {
+    display: flex;
+    gap: 12px;
+  }
+  
+  .settings-card {
+    background: var(--color-surface-pearl);
+    padding: 24px;
+    border-radius: 12px;
+    border: 1px solid var(--color-divider);
+  }
+
+  /* Mobile responsiveness (Facebook Messenger inspired) */
+  @media (max-width: 768px) {
+    .circles-wrapper {
+      flex-direction: column;
+      height: calc(100dvh - 64px); /* use dvh for mobile */
+      padding-bottom: 60px; /* space for fixed bottom nav */
+    }
+    .circles-sidebar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: 60px;
+      flex-direction: row;
+      border-right: none;
+      border-top: 1px solid var(--color-divider);
+      z-index: 100;
+      background: var(--color-surface-pearl);
+    }
+    .sidebar-header {
+      display: none;
+    }
+    .sidebar-nav {
+      flex-direction: row;
+      width: 100%;
+      justify-content: space-around;
+      padding: 0;
+      gap: 0;
+      height: 100%;
+    }
+    .nav-item {
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 0;
+      border-radius: 0;
+      flex: 1;
+      justify-content: center;
+    }
+    .nav-item .nav-text {
+      font-size: 0.7rem;
+    }
+    .main-content {
+      padding: 16px;
+    }
+    .badge {
+      position: absolute;
+      top: 4px;
+      right: calc(50% - 24px);
+      margin: 0;
+    }
+    .nav-item { position: relative; }
+  }
+</style>
+
+<style is:global>
+  /* Global styles for dynamically injected JS HTML */
+  .user-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border-top: 1px solid var(--color-divider);
+  }
+
+  .user-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 8px;
+    border-bottom: 1px solid var(--color-divider);
+    transition: background 0.15s;
+    border-radius: 6px;
+  }
+
+  .user-item:hover {
+    background: rgba(255,255,255,0.03);
+    padding-inline: 16px;
+    margin-inline: -8px;
+  }
+
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    min-width: 0; /* for truncation */
+  }
+
+  .user-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--color-divider);
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  .user-avatar-wrapper {
+    position: relative;
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  .user-avatar-wrapper .gold-verified-tick {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 16px;
+    height: 16px;
+    background: var(--color-bg);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    z-index: 10;
+  }
+
+  .user-avatar-wrapper .gold-verified-tick i {
+    background: linear-gradient(135deg, #fff3a1 0%, #d4af37 45%, #ffdf73 60%, #a67b14 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 15px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 2px rgba(212,175,55,0.6));
+  }
+
+  .user-name-wrapper {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .user-username {
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .user-bio {
+    font-size: 0.85rem;
+    color: var(--color-ink-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+
+  .user-status-text {
+    font-size: 0.8rem;
+    color: var(--color-primary);
+    font-weight: 600;
+  }
+
+  .user-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .action-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--color-surface-pearl);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--color-ink-muted);
+    transition: all 0.2s;
+  }
+
+  .action-btn:hover {
+    color: var(--color-ink);
+    background: rgba(255,255,255,0.1);
+  }
+
+  .action-btn.accept { color: var(--color-success); }
+  .action-btn.accept:hover { background: rgba(73, 184, 122, 0.2); }
+
+  .action-btn.reject { color: var(--color-danger); }
+  .action-btn.reject:hover { background: rgba(255, 102, 102, 0.2); }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--color-ink-muted);
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    let allFriends: any[] = [];
+    const friendListEl = document.getElementById('friend-list');
+    const requestsListEl = document.getElementById('requests-list');
+    const discoverListEl = document.getElementById('discover-list');
+    
+    const navItems = document.querySelectorAll('.nav-item');
+    const tabPanes = document.querySelectorAll('.tab-pane');
+    const currentTabTitle = document.getElementById('current-tab-title');
+    
+    const titles: Record<string, string> = {
+      'all': 'All Friends',
+      'pending': 'Pending Requests',
+      'discover': 'Discover Users',
+      'settings': 'Settings'
+    };
+
+    navItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const tabId = (item as HTMLElement).dataset.tab;
+        
+        navItems.forEach(n => n.classList.remove('active'));
+        item.classList.add('active');
+        
+        tabPanes.forEach(p => p.classList.remove('active'));
+        document.getElementById(`tab-${tabId}`)?.classList.add('active');
+        
+        if (currentTabTitle && tabId) {
+          currentTabTitle.textContent = titles[tabId] || 'Friends';
+        }
+
+        if (tabId === 'discover' && discoverListEl?.children.length === 1 && discoverListEl?.querySelector('.empty-state')) {
+           searchUsers(''); // Load defaults
+        }
+      });
+    });
+
+    async function fetchFriends() {
+      try {
+        if (!window.Clerk || !window.Clerk.session) {
+          // Wait for Clerk to initialize
+          setTimeout(fetchFriends, 200);
+          return;
+        }
+        
+        const token = await window.Clerk.session.getToken();
+        if (!token) return; // Not signed in
+        
+        const res = await fetch(`${window.API_BASE_URL || ''}/api/friends`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          allFriends = data.friendships;
+          renderFriends();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function renderFriends() {
+      if (!friendListEl || !requestsListEl) return;
+      
+      const accepted = allFriends.filter(f => f.status === 'accepted');
+      const pending = allFriends.filter(f => f.status === 'pending');
+      
+      document.getElementById('friends-count')!.textContent = accepted.length.toString();
+      document.getElementById('pending-count')!.textContent = pending.length.toString();
+      const badge = document.getElementById('pending-badge');
+      if (badge) {
+        badge.textContent = pending.length.toString();
+        badge.style.display = pending.length > 0 ? 'inline-block' : 'none';
+      }
+
+      if (accepted.length === 0) {
+        friendListEl.innerHTML = '<li class="empty-state">No friends yet. Head to Discover to find someone!</li>';
+      } else {
+        friendListEl.innerHTML = accepted.map(f => `
+          <li class="user-item">
+            <div class="user-info">
+              <div class="user-avatar-wrapper">
+                <img src="${f.avatar || '/placeholder-avatar.png'}" class="user-avatar" alt="Avatar" />
+                ${f.isAdmin ? `<div class="gold-verified-tick" title="Admin"><i class="bi bi-patch-check-fill"></i></div>` : ''}
+              </div>
+              <div class="user-name-wrapper">
+                <span class="user-username">${f.username}</span>
+                ${f.bio ? `<span class="user-bio">${f.bio}</span>` : ''}
+              </div>
+            </div>
+            <div class="user-actions">
+              <button class="action-btn" title="Message" onclick="window.location.href='/circles/chat/${f.friendId}'">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+              </button>
+              <button class="action-btn reject delete-friend-btn" data-id="${f.id}" title="Remove Friend">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+          </li>
+        `).join('');
+      }
+
+      if (pending.length === 0) {
+        requestsListEl.innerHTML = '<li class="empty-state">No pending requests.</li>';
+      } else {
+        requestsListEl.innerHTML = pending.map(f => `
+          <li class="user-item">
+            <div class="user-info">
+              <div class="user-avatar-wrapper">
+                <img src="${f.avatar || '/placeholder-avatar.png'}" class="user-avatar" alt="Avatar" />
+                ${f.isAdmin ? `<div class="gold-verified-tick" title="Admin"><i class="bi bi-patch-check-fill"></i></div>` : ''}
+              </div>
+              <div class="user-name-wrapper">
+                <span class="user-username">${f.username}</span>
+                <span class="user-status-text">${f.isOutgoing ? 'Outgoing Request' : 'Incoming Request'}</span>
+              </div>
+            </div>
+            <div class="user-actions">
+              ${f.isOutgoing 
+                ? `<button class="action-btn reject delete-friend-btn" data-id="${f.id}" title="Cancel Request">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                   </button>`
+                : `<button class="action-btn accept accept-request-btn" data-id="${f.id}" title="Accept">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                   </button>
+                   <button class="action-btn reject delete-friend-btn" data-id="${f.id}" title="Decline">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                   </button>`
+              }
+            </div>
+          </li>
+        `).join('');
+      }
+      
+      attachListListeners();
+    }
+
+    function attachListListeners() {
+      document.querySelectorAll('.delete-friend-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = (e.currentTarget as HTMLButtonElement).dataset.id;
+          if (confirm('Are you sure?')) await deleteFriendship(id);
+        });
+      });
+
+      document.querySelectorAll('.accept-request-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = (e.currentTarget as HTMLButtonElement).dataset.id;
+          await acceptRequest(id);
+        });
+      });
+    }
+
+    async function acceptRequest(id: string | undefined) {
+      if (!id) return;
+      try {
+        const token = await window.Clerk?.session?.getToken();
+        if (!token) return;
+        const res = await fetch(`${window.API_BASE_URL || ''}/api/friends/${id}/accept`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) fetchFriends();
+      } catch (err) { console.error(err); }
+    }
+
+    async function deleteFriendship(id: string | undefined) {
+      if (!id) return;
+      try {
+        const token = await window.Clerk?.session?.getToken();
+        if (!token) return;
+        const res = await fetch(`${window.API_BASE_URL || ''}/api/friends/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) fetchFriends();
+      } catch (err) { console.error(err); }
+    }
+
+    const discoverInput = document.getElementById('discover-input') as HTMLInputElement;
+    const discoverBtn = document.getElementById('discover-btn');
+
+    async function searchUsers(queryOverride?: string) {
+      const q = typeof queryOverride === 'string' ? queryOverride : discoverInput.value.trim();
+      
+      if (discoverBtn) discoverBtn.innerHTML = '...';
+      try {
+        const token = await window.Clerk?.session?.getToken();
+        if (!token) return;
+
+        const res = await fetch(`${window.API_BASE_URL || ''}/api/friends/discover?q=${encodeURIComponent(q)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          renderDiscoverResults(data.users);
+        }
+      } catch(err) {
+        console.error(err);
+      } finally {
+        if (discoverBtn) discoverBtn.innerHTML = 'Search';
+      }
+    }
+
+    function renderDiscoverResults(users: any[]) {
+      if (!discoverListEl) return;
+      document.getElementById('discover-results-header')!.textContent = discoverInput.value.trim() ? 'SEARCH RESULTS' : 'SUGGESTED USERS';
+      
+      if (users.length === 0) {
+        discoverListEl.innerHTML = '<li class="empty-state">No users found.</li>';
+        return;
+      }
+      
+      discoverListEl.innerHTML = users.map(u => {
+        let actionHtml = '';
+        if (u.friendshipStatus === 'accepted') {
+          actionHtml = `<span class="text-success" style="font-size:0.8rem; font-weight:700;">Friends</span>`;
+        } else if (u.friendshipStatus === 'pending') {
+          actionHtml = `<span class="text-muted" style="font-size:0.8rem;">${u.isOutgoing ? 'Request Sent' : 'Request Received'}</span>`;
+        } else {
+          actionHtml = `<button class="btn btn--sm btn--primary send-request-btn" data-clerk="${u.id}">Add</button>`;
+        }
+        
+        return `
+          <li class="user-item">
+            <div class="user-info">
+              <div class="user-avatar-wrapper">
+                <img src="${u.avatar || '/placeholder-avatar.png'}" class="user-avatar" alt="Avatar" />
+                ${u.isAdmin ? `<div class="gold-verified-tick" title="Admin"><i class="bi bi-patch-check-fill"></i></div>` : ''}
+              </div>
+              <div class="user-name-wrapper">
+                <span class="user-username">${u.username}</span>
+                ${u.bio ? `<span class="user-bio">${u.bio}</span>` : ''}
+              </div>
+            </div>
+            <div class="user-actions">
+              ${actionHtml}
+            </div>
+          </li>
+        `;
+      }).join('');
+      
+      document.querySelectorAll('.send-request-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const clerkId = (e.currentTarget as HTMLButtonElement).dataset.clerk;
+          await sendRequest(clerkId);
+        });
+      });
+    }
+
+    async function sendRequest(clerkId: string | undefined) {
+      if (!clerkId) return;
+      try {
+        const token = await window.Clerk?.session?.getToken();
+        if (!token) return;
+        const res = await fetch(`${window.API_BASE_URL || ''}/api/friends/request`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ clerkId })
+        });
+        
+        if (res.ok) {
+          searchUsers(); 
+          fetchFriends(); 
+        } else {
+          const err = await res.json();
+          alert(err.error || 'Failed to send request');
+        }
+      } catch (err) { console.error(err); }
+    }
+
+    discoverBtn?.addEventListener('click', () => searchUsers());
+    discoverInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') searchUsers();
+    });
+
+    const filterInput = document.getElementById('filter-friends') as HTMLInputElement;
+    filterInput?.addEventListener('input', (e) => {
+      const q = (e.target as HTMLInputElement).value.toLowerCase();
+      const items = friendListEl!.querySelectorAll('.user-item');
+      items.forEach((item: any) => {
+        const name = item.querySelector('.user-username').textContent.toLowerCase();
+        if (name.includes(q)) {
+          item.style.display = 'flex';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
+
+    const bioForm = document.getElementById('bio-form');
+    const bioInput = document.getElementById('bio-input') as HTMLTextAreaElement;
+    
+    bioForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const bio = bioInput.value.trim();
+      const token = await window.Clerk?.session?.getToken();
+      if (!token) return;
+      
+      const btn = document.getElementById('save-bio-btn');
+      if (btn) btn.innerHTML = 'Saving...';
+      
+      await fetch(`${window.API_BASE_URL || ''}/api/friends/bio`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bio })
+      });
+      
+      if (btn) btn.innerHTML = 'Saved!';
+      setTimeout(() => { if (btn) btn.innerHTML = 'Save Bio'; }, 2000);
+    });
+
+    fetchFriends();
+
+    // Listen for real-time events
+    window.addEventListener('circles:friend_request', () => { fetchFriends(); });
+    window.addEventListener('circles:friend_accepted', () => { fetchFriends(); });
+    window.addEventListener('circles:friend_removed', () => { fetchFriends(); });
+    window.addEventListener('socket:connected', () => { fetchFriends(); });
+  });
+</script>

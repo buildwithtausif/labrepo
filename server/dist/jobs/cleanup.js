@@ -1,5 +1,6 @@
 import { getDb } from '../db/runtime.js';
 import { recycleBin, academicSessions, subjects, works, files } from '../db/schema.js';
+import { getGDriveAdapterForUser } from '../storage/resolver.js';
 import { eq, lte, and, sql } from 'drizzle-orm';
 import { updateUserUsage } from '../services/usage.service.js';
 /**
@@ -7,15 +8,21 @@ import { updateUserUsage } from '../services/usage.service.js';
  * 1. Permanently delete expired recycle bin items (7 days)
  * 2. Auto-delete academic sessions past their auto_delete_date
  */
-export function startCleanupJob(storage) {
+export function startCleanupJob(storageDriver, fallbackStorage) {
     // Run immediately on startup
-    runCleanup(storage).catch(console.error);
+    runCleanup(storageDriver, fallbackStorage).catch(console.error);
     // Then run every hour
     setInterval(() => {
-        runCleanup(storage).catch(console.error);
+        runCleanup(storageDriver, fallbackStorage).catch(console.error);
     }, 60 * 60 * 1000);
 }
-async function runCleanup(storage) {
+async function resolveStorageForUser(storageDriver, fallbackStorage, userId) {
+    if (storageDriver === 'gdrive') {
+        return getGDriveAdapterForUser(userId);
+    }
+    return fallbackStorage;
+}
+async function runCleanup(storageDriver, fallbackStorage) {
     const db = getDb();
     const now = new Date().toISOString();
     // 1. Clean expired recycle bin items
@@ -36,7 +43,10 @@ async function runCleanup(storage) {
         let fileDelta = 0;
         for (const file of filesToDelete) {
             try {
-                await storage.delete(file.storage_key || file.storageKey);
+                const storage = await resolveStorageForUser(storageDriver, fallbackStorage, item.userId);
+                if (storage) {
+                    await storage.delete(file.storage_key || file.storageKey);
+                }
                 storageDelta -= (file.sizeBytes || file.size_bytes || 0);
                 fileDelta -= 1;
             }

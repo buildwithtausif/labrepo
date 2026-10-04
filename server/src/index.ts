@@ -81,6 +81,9 @@ import { createDownloadRoutes } from './routes/download.js';
 import { createRecycleBinRoutes } from './routes/recycle-bin.js';
 import { createAdminRoutes } from './routes/admin.js';
 import { gdriveAuthRoutes } from './routes/gdrive-auth.js';
+import { friendRoutes } from './routes/friends.js';
+import { createShareRoutes } from './routes/shares.js';
+import { messageRoutes } from './routes/messages.js';
 
 import { requireGDriveAdapter } from './storage/resolver.js';
 import { MockS3Adapter } from './storage/mock-s3.js';
@@ -103,6 +106,7 @@ app.use(createPublicRoutes(fallbackStorage));
 app.use(clerkAuthMiddleware);
 
 app.use(userRoutes);
+app.use(friendRoutes);
 app.use(searchRoutes);
 app.use(sessionRoutes);
 app.use(subjectRoutes);
@@ -110,6 +114,8 @@ app.use(workRoutes);
 app.use(createFileRoutes(resolveStorage));
 app.use(createDownloadRoutes(resolveStorage));
 app.use(createRecycleBinRoutes(resolveStorage));
+app.use(createShareRoutes(resolveStorage));
+app.use(messageRoutes);
 app.use(createAdminRoutes(resolveStorage, fallbackStorage));
 app.use(gdriveAuthRoutes());
 
@@ -123,15 +129,19 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
+import { initSocket } from './socket';
+
 async function start() {
   await initDatabase();
   console.log('[server] Database initialized');
 
   startCleanupJob(process.env.STORAGE_DRIVER || 'mock', fallbackStorage);
   
-  app.listen(PORT, HOST, () => {
+  const server = app.listen(PORT, HOST, () => {
     console.log(`[server] LabRepo Express API running at http://${HOST}:${PORT}`);
   });
+  
+  initSocket(server);
 }
 
 start().catch((err) => {

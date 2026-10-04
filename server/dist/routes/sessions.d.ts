@@ -1,2 +1,1 @@
-import type { FastifyInstance } from 'fastify';
-export declare function sessionRoutes(fastify: FastifyInstance): Promise<void>;
+export declare const sessionRoutes: import("express-serve-static-core").Router;

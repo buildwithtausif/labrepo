@@ -299,51 +299,73 @@ const maxUploadSizeMb = Math.round(maxUploadSize / (1024 * 1024));
     </main>
 
     <!-- Global Footer -->
-    <footer class="app-footer">
-        <div class="container text-center flex flex-col items-center gap-4">
-          <nav aria-label="Footer Navigation">
-            <ul class="footer-links">
-              <li>
-                <a href="https://github.com/buildwithtausif" target="_blank" rel="noopener noreferrer">
-                  Developed by Tausif Alam
-                </a>
-              </li>
-              <li class="hide-mobile" aria-hidden="true">&bull;</li>
-              <li>
-                <a href="/security-and-moderation">
-                  Security &amp; Moderation
-                </a>
-              </li>
-              <li class="hide-mobile" aria-hidden="true">&bull;</li>
-              <li>
-                <a href="/policy">
-                  Policy
-                </a>
-              </li>
-              <li class="hide-mobile" aria-hidden="true">&bull;</li>
-              <li>
-                <a href="/status">
-                  System Status
-                </a>
-              </li>
-              <li class="hide-mobile" aria-hidden="true">&bull;</li>
-              <li>
-                <a href="/contact" target="_blank">
-                  Contact Us
-                </a>
-              </li>
-            </ul>
-          </nav>
-          <p class="text-caption text-muted">&copy; 2026 LabRepo. All rights reserved.</p>
-        </div>
-      </footer>
+    {!currentPath.startsWith('/circles') && (
+      <footer class="app-footer">
+          <div class="container text-center flex flex-col items-center gap-4">
+            <nav aria-label="Footer Navigation">
+              <ul class="footer-links">
+                <li>
+                  <a href="https://github.com/buildwithtausif" target="_blank" rel="noopener noreferrer">
+                    Developed by Tausif Alam
+                  </a>
+                </li>
+                <li class="hide-mobile" aria-hidden="true">&bull;</li>
+                <li>
+                  <a href="/security-and-moderation">
+                    Security &amp; Moderation
+                  </a>
+                </li>
+                <li class="hide-mobile" aria-hidden="true">&bull;</li>
+                <li>
+                  <a href="/policy">
+                    Policy
+                  </a>
+                </li>
+                <li class="hide-mobile" aria-hidden="true">&bull;</li>
+                <li>
+                  <a href="/status">
+                    System Status
+                  </a>
+                </li>
+                <li class="hide-mobile" aria-hidden="true">&bull;</li>
+                <li>
+                  <a href="/contact" target="_blank">
+                    Contact Us
+                  </a>
+                </li>
+              </ul>
+            </nav>
+            <p class="text-caption text-muted">&copy; 2026 LabRepo. All rights reserved.</p>
+          </div>
+        </footer>
+    )}
 
     <script src="../scripts/api.ts"></script>
     <script>
       import { api } from "../scripts/api";
+      import { initClientSocket } from "../scripts/socket";
+      import { getOrGenerateKeyPair } from "../scripts/e2e";
       
       document.addEventListener('DOMContentLoaded', () => {
         const widget = document.getElementById('gdrive-topbar-widget');
+        
+        // Init real-time socket connection if auth is ready
+        if (window.Clerk && window.Clerk.isReady) {
+          initClientSocket();
+          if (window.location.pathname.startsWith('/circles')) {
+            getOrGenerateKeyPair();
+          }
+        } else {
+          window.addEventListener('load', () => {
+            setTimeout(() => {
+              initClientSocket();
+              if (window.location.pathname.startsWith('/circles')) {
+                getOrGenerateKeyPair();
+              }
+            }, 1000);
+          });
+        }
+
         if (!widget) return;
         
         let isGDriveConnected = false;
@@ -610,8 +632,45 @@ const maxUploadSizeMb = Math.round(maxUploadSize / (1024 * 1024));
         })();
       </script>
     )}
+    {!currentPath.startsWith('/circles') && (
+      <a href="/circles" class="circles-fab" title="Open Circles">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      </a>
+    )}
   </body>
 </html>
+
+<style is:global>
+  .circles-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(197, 27, 27, 0.4);
+    z-index: 100;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .circles-fab:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(197, 27, 27, 0.5);
+  }
+  
+  @media (max-width: 768px) {
+    .circles-fab {
+      bottom: 16px;
+      right: 16px;
+      width: 48px;
+      height: 48px;
+    }
+  }
+</style>
 
 <style is:global>
   @import '../styles/global.css';

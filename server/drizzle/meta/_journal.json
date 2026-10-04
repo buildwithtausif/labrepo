@@ -29,6 +29,20 @@
       "when": 1790433141513,
       "tag": "0003_lonely_master_mold",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791099180687,
+      "tag": "0004_legal_meteorite",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791100422722,
+      "tag": "0005_fair_cammi",
+      "breakpoints": true
     }
   ]
 }

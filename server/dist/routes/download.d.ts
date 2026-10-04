@@ -1,3 +1,2 @@
-import type { FastifyInstance } from 'fastify';
-import type { StorageAdapter } from '../storage/adapter.js';
-export declare function createDownloadRoutes(storage: StorageAdapter): (fastify: FastifyInstance) => Promise<void>;
+import type { StorageResolverFn } from './files.js';
+export declare function createDownloadRoutes(resolveStorage: StorageResolverFn): import("express-serve-static-core").Router;
