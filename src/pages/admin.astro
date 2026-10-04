@@ -9,6 +9,11 @@ const ADMIN_USER_ID = env.ADMIN_USER_ID?.trim() || import.meta.env.ADMIN_USER_ID
 const CLERK_ADMIN_USER_ID = env.CLERK_ADMIN_USER_ID?.trim() || import.meta.env.CLERK_ADMIN_USER_ID;
 const isDevBypass = env.ENV?.trim() === 'development';
 
+const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 10) / (1024 * 1024));
+const uploadsPerMinute = parseInt(env.UPLOADS_PER_MINUTE || '20', 10);
+const loginRateLimit = parseInt(env.LOGIN_RATE_LIMIT || '10', 10);
+const maxRepositories = parseInt(env.MAX_REPOSITORIES || '50', 10);
+
 if (!isDevBypass) {
   const user = await Astro.locals.currentUser();
   if (!user) {
@@ -300,7 +305,7 @@ const displayUrl = siteUrl.replace(/^https?:\/\//, '');
                   </div>
                   <div>
                     <label for="seo-description" class="text-caption text-muted block mb-2 font-medium">Default Description</label>
-                    <textarea id="seo-description" name="description" class="input w-full px-4 py-3 min-h-[120px] resize-y rounded-md" placeholder="Site description for search engines"></textarea>
+                    <textarea id="seo-description" name="description" class="input w-full px-4 py-3 min-h-30 resize-y rounded-md" placeholder="Site description for search engines"></textarea>
                   </div>
                   <div>
                     <label for="seo-twitter" class="text-caption text-muted block mb-2 font-medium">Twitter Handle</label>
@@ -427,14 +432,13 @@ const displayUrl = siteUrl.replace(/^https?:\/\//, '');
               </div>
               <p>The following limits are enforced system-wide:</p>
               <div class="admin-learn-card__table">
-                <div><span class="text-muted">Max upload size</span><strong>25 MB per file</strong></div>
-                <div><span class="text-muted">Max storage per user</span><strong>256 MB</strong></div>
+                <div><span class="text-muted">Max upload size</span><strong>{maxUploadSizeMb} MB per file</strong></div>
                 <div><span class="text-muted">Max files per request</span><strong>20 files</strong></div>
-                <div><span class="text-muted">Upload rate limit</span><strong>35 per minute</strong></div>
-                <div><span class="text-muted">Login rate limit</span><strong>10 per minute</strong></div>
-                <div><span class="text-muted">Max repositories</span><strong>50 per user</strong></div>
+                <div><span class="text-muted">Upload rate limit</span><strong>{uploadsPerMinute} per minute</strong></div>
+                <div><span class="text-muted">Login rate limit</span><strong>{loginRateLimit} per minute</strong></div>
+                <div><span class="text-muted">Max repositories</span><strong>{maxRepositories} per user</strong></div>
               </div>
-              <p class="text-caption text-muted mt-2">These can be overridden via environment variables: <code>MAX_UPLOAD_SIZE</code>, <code>MAX_STORAGE_PER_USER</code>, <code>UPLOADS_PER_MINUTE</code>, <code>LOGIN_RATE_LIMIT</code>, <code>MAX_REPOSITORIES</code>.</p>
+              <p class="text-caption text-muted mt-2">These can be overridden via environment variables: <code>MAX_UPLOAD_SIZE</code>, <code>UPLOADS_PER_MINUTE</code>, <code>LOGIN_RATE_LIMIT</code>, <code>MAX_REPOSITORIES</code>.</p>
             </div>
 
             <!-- Allowed file types -->

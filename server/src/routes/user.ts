@@ -76,8 +76,6 @@ userRoutes.get('/api/user/storage-stats', async (req, res) => {
     .limit(1);
 
   const used = stats?.storageUsed || 0;
-  const allocated = securityConfig.maxStoragePerUserBytes;
-
   const breakdown = await db
     .select({
       ext: files.extension,
@@ -90,7 +88,7 @@ userRoutes.get('/api/user/storage-stats', async (req, res) => {
 
   res.json({
     used,
-    allocated,
+    allocated: null,
     breakdown,
   });
 });

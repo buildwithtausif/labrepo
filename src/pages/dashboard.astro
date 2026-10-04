@@ -11,6 +11,7 @@ const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
 const ADMIN_USER_ID = env.ADMIN_USER_ID?.trim() || import.meta.env.ADMIN_USER_ID;
 const CLERK_ADMIN_USER_ID = env.CLERK_ADMIN_USER_ID?.trim() || import.meta.env.CLERK_ADMIN_USER_ID;
 const isAdmin = userId === ADMIN_USER_ID || userId === CLERK_ADMIN_USER_ID;
+const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 10) / (1024 * 1024));
 ---
 
 <Layout title="Dashboard">
@@ -180,7 +181,7 @@ const isAdmin = userId === ADMIN_USER_ID || userId === CLERK_ADMIN_USER_ID;
               Drag & drop files here, or click to browse
             </p>
             <p class="text-caption text-muted">
-              Max 25 MB total
+              Max {maxUploadSizeMb} MB total
             </p>
             <input type="file" id="upload-file-input" multiple style="display: none;" />
           </div>
@@ -701,7 +702,7 @@ const isAdmin = userId === ADMIN_USER_ID || userId === CLERK_ADMIN_USER_ID;
         function renderQuickSelectedFiles() {
           const formatSize = (window as any).__labrepo_formatSize;
           const totalSize = quickSelectedFiles.reduce((a, f) => a + f.size, 0);
-          const tooLarge = totalSize > 25 * 1024 * 1024;
+          const tooLarge = totalSize > window.MAX_UPLOAD_SIZE;
 
           selectedFilesDiv.innerHTML = quickSelectedFiles.map((f, i) => `
             <div class="selected-file flex items-center justify-between py-2 border-b">
@@ -716,7 +717,7 @@ const isAdmin = userId === ADMIN_USER_ID || userId === CLERK_ADMIN_USER_ID;
           if (quickSelectedFiles.length > 0) {
             selectedFilesDiv.innerHTML += `
               <div class="text-caption mt-2 ${tooLarge ? 'text-danger' : 'text-muted'}">
-                Total: ${formatSize(totalSize)} / 25 MB ${tooLarge ? '— exceeds limit!' : ''}
+                Total: ${formatSize(totalSize)} / ${window.MAX_UPLOAD_SIZE_MB} MB ${tooLarge ? '— exceeds limit!' : ''}
               </div>
             `;
           }
@@ -780,8 +781,8 @@ const isAdmin = userId === ADMIN_USER_ID || userId === CLERK_ADMIN_USER_ID;
             saveBtn.textContent = 'Uploading...';
 
             const totalSize = quickSelectedFiles.reduce((a, f) => a + f.size, 0);
-            if (totalSize > 25 * 1024 * 1024) {
-              showToast('Total file size exceeds 25 MB', 'error');
+            if (totalSize > window.MAX_UPLOAD_SIZE) {
+              showToast(`Total file size exceeds ${window.MAX_UPLOAD_SIZE_MB} MB`, 'error');
               saveBtn.disabled = false;
               saveBtn.textContent = 'Upload';
               return;

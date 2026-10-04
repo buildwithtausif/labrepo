@@ -7,6 +7,9 @@ if (!userId) {
 }
 
 const { id } = Astro.params;
+import { loadEnv } from "vite";
+const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
+const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 10) / (1024 * 1024));
 ---
 
 <Layout title="Subject">
@@ -66,7 +69,7 @@ const { id } = Astro.params;
               Drag & drop files here, or click to browse
             </p>
             <p class="text-caption text-muted">
-              Max 25 MB total
+              Max {maxUploadSizeMb} MB total
             </p>
             <input type="file" id="file-input" multiple style="display: none;" />
           </div>
@@ -259,7 +262,7 @@ const { id } = Astro.params;
 
         function renderSelectedFiles() {
           const totalSize = selectedFiles.reduce((a, f) => a + f.size, 0);
-          const tooLarge = totalSize > 25 * 1024 * 1024;
+          const tooLarge = totalSize > window.MAX_UPLOAD_SIZE;
 
           selectedFilesDiv.innerHTML = selectedFiles.map((f, i) => `
             <div class="selected-file flex items-center justify-between py-2 border-b">
@@ -274,7 +277,7 @@ const { id } = Astro.params;
           if (selectedFiles.length > 0) {
             selectedFilesDiv.innerHTML += `
               <div class="text-caption mt-2 ${tooLarge ? 'text-danger' : 'text-muted'}">
-                Total: ${formatSize(totalSize)} / 25 MB ${tooLarge ? '— exceeds limit!' : ''}
+                Total: ${formatSize(totalSize)} / ${window.MAX_UPLOAD_SIZE_MB} MB ${tooLarge ? '— exceeds limit!' : ''}
               </div>
             `;
           }
@@ -308,8 +311,8 @@ const { id } = Astro.params;
 
             if (selectedFiles.length > 0) {
               const totalSize = selectedFiles.reduce((a, f) => a + f.size, 0);
-              if (totalSize > 25 * 1024 * 1024) {
-                showToast('Total file size exceeds 25 MB', 'error');
+              if (totalSize > window.MAX_UPLOAD_SIZE) {
+                showToast(`Total file size exceeds ${window.MAX_UPLOAD_SIZE_MB} MB`, 'error');
                 resetUploadProgress();
                 saveBtn.disabled = false;
                 saveBtn.textContent = 'Create Work';

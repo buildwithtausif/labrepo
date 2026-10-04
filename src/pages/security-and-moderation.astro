@@ -1,5 +1,8 @@
 ---
 import Layout from '../Layouts/Layout.astro';
+import { loadEnv } from "vite";
+const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
+const uploadsPerMinute = parseInt(env.UPLOADS_PER_MINUTE || '20', 10);
 ---
 
 <Layout title="Security & Moderation" showNav={true}>
@@ -16,7 +19,7 @@ import Layout from '../Layouts/Layout.astro';
           <h2 class="security-item__title"><i class="bi bi-speedometer2 mr-2"></i> Upload Limits &amp; Bursts</h2>
           <p class="security-item__copy">To ensure fair usage, we enforce two distinct upload constraints:</p>
           <ul class="security-item__list">
-            <li><strong>Rate Limit (35/min):</strong> A standard API rate limit that blocks the 36th upload attempt within a single minute. This simply returns a "Too Many Requests" error to pace your uploads.</li>
+            <li><strong>Rate Limit ({uploadsPerMinute}/min):</strong> A standard API rate limit that blocks the {uploadsPerMinute + 1}th upload attempt within a single minute. This simply returns a "Too Many Requests" error to pace your uploads.</li>
             <li><strong>Abuse Flag (50/min):</strong> An automated moderation rule that triggers if you successfully upload 50 files within 60 seconds. This is considered an <strong>Upload Burst</strong> and indicates potential spam. Hitting this limit flags your account for admin review.</li>
           </ul>
         </article>

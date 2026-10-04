@@ -1,6 +1,6 @@
 export interface SecurityConfig {
   maxUploadBytes: number;
-  maxStoragePerUserBytes: number;
+
   loginRateLimit: number;
   uploadRateLimit: number;
   maxRepositories: number;
@@ -36,7 +36,6 @@ function parseListEnv(name: string, fallback: string[]): string[] {
 export function getSecurityConfig(): SecurityConfig {
   return {
     maxUploadBytes: parseNumberEnv('MAX_UPLOAD_SIZE', 25 * 1024 * 1024),
-    maxStoragePerUserBytes: parseNumberEnv('MAX_STORAGE_PER_USER', 100 * 1024 * 1024),
     loginRateLimit: parseNumberEnv('LOGIN_RATE_LIMIT', 10),
     uploadRateLimit: parseNumberEnv('UPLOADS_PER_MINUTE', 20),
     maxRepositories: parseNumberEnv('MAX_REPOSITORIES', 50),

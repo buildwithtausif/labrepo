@@ -5,6 +5,9 @@ const { userId } = Astro.locals.auth();
 if (!userId) {
   return Astro.redirect("/");
 }
+import { loadEnv } from "vite";
+const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
+const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 10) / (1024 * 1024));
 ---
 
 <Layout title="Welcome to LabRepo" showNav={false}>
@@ -174,7 +177,7 @@ if (!userId) {
                 <span class="upload-step__num">3</span>
                 <div>
                   <strong class="text-body-strong block mb-1">Drop your files</strong>
-                  <p class="text-caption text-muted">Drag & drop or select multiple files. Up to 25 MB per upload.</p>
+                  <p class="text-caption text-muted">Drag & drop or select multiple files. Up to {maxUploadSizeMb} MB per upload.</p>
                 </div>
               </div>
               <div class="store-utility-card flex items-start gap-4">
