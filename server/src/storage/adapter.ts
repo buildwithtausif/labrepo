@@ -47,6 +47,7 @@ export function buildStorageKey(
   filename: string
 ): string {
   return [userId, sessionName, subjectName, workTitle, filename]
+    .filter(segment => segment.trim() !== '')
     .map(sanitizePathSegment)
     .join('/');
 }

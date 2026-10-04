@@ -83,7 +83,7 @@ import { createAdminRoutes } from './routes/admin.js';
 import { gdriveAuthRoutes } from './routes/gdrive-auth.js';
 import { friendRoutes } from './routes/friends.js';
 import { createShareRoutes } from './routes/shares.js';
-import { messageRoutes } from './routes/messages.js';
+import { createMessageRoutes } from './routes/messages.js';
 
 import { requireGDriveAdapter } from './storage/resolver.js';
 import { MockS3Adapter } from './storage/mock-s3.js';
@@ -115,7 +115,7 @@ app.use(createFileRoutes(resolveStorage));
 app.use(createDownloadRoutes(resolveStorage));
 app.use(createRecycleBinRoutes(resolveStorage));
 app.use(createShareRoutes(resolveStorage));
-app.use(messageRoutes);
+app.use(createMessageRoutes(resolveStorage));
 app.use(createAdminRoutes(resolveStorage, fallbackStorage));
 app.use(gdriveAuthRoutes());
 

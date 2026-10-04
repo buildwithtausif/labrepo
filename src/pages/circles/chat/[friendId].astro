@@ -10,15 +10,56 @@ const { friendId } = Astro.params;
 ---
 
 <Layout title="Circles - Chat">
-  <div class="chat-wrapper">
-    <div class="chat-header">
-      <a href="/circles" class="btn btn--ghost btn--sm back-btn">
+  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+  <div class="chat-layout-wrapper">
+    <aside class="chat-sidebar hide-mobile">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">Circles</h2>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/circles" class="nav-item">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span class="nav-text">Friends</span>
+        </a>
+        <a href="/circles#pending" class="nav-item">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span class="nav-text">Pending</span>
+          <span class="badge" id="pending-badge" style="display:none">0</span>
+        </a>
+        <a href="/circles#discover" class="nav-item discover-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <span class="nav-text">Discover</span>
+        </a>
+        <a href="/circles#settings" class="nav-item">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <span class="nav-text">Settings</span>
+        </a>
+      </nav>
+    </aside>
+    <div class="chat-wrapper">
+      <div class="chat-header">
+      <a href="/circles" class="btn btn--ghost btn--sm back-btn" style="margin-right: 8px; padding: 4px;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
       </a>
       <div id="chat-header-avatar-container"></div>
       <div class="chat-header-info">
         <h2 id="chat-friend-name">Loading...</h2>
         <span class="status-indicator">E2E Encrypted</span>
+      </div>
+      <div class="chat-header-actions" style="display: flex; gap: 8px; margin-left: auto; align-items: center; position: relative;">
+        <button id="clear-chat-btn-desktop" class="btn btn--secondary-pill btn--sm hide-mobile" title="Clear chat for me">
+          Clear Chat
+        </button>
+        <div class="dropdown-wrapper hide-desktop" id="mobile-menu-wrapper" style="position: relative;">
+          <button id="mobile-menu-btn" class="btn btn--ghost btn--sm">
+            <i class="bi bi-three-dots-vertical"></i>
+          </button>
+          <div id="mobile-menu" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; background: var(--color-surface-pearl); border: 1px solid var(--color-divider); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 4px; min-width: 150px; z-index: 100;">
+            <button id="clear-chat-btn-mobile" class="btn btn--ghost" style="width: 100%; text-align: left; color: var(--color-error); justify-content: flex-start; gap: 8px; display: flex; align-items: center;">
+              <i class="bi bi-trash"></i> Clear Chat
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -33,7 +74,10 @@ const { friendId } = Astro.params;
           <button type="button" class="btn btn--ghost attachment-btn" id="upload-btn" title="Send a file">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
           </button>
-          <input type="file" id="file-input" style="display:none;" />
+          <button type="button" class="btn btn--ghost attachment-btn" id="view-twice-toggle" title="Send as View Twice" style="color: var(--color-ink-muted);">
+            <span style="font-weight: 800; font-size: 1rem; font-family: monospace;">2x</span>
+          </button>
+          <input type="file" id="file-input" style="display:none;" multiple />
         </div>
         
         <button type="submit" class="btn btn--primary send-btn" id="send-btn" disabled>
@@ -42,30 +86,142 @@ const { friendId } = Astro.params;
       </form>
     </div>
   </div>
+  </div>
+
+  <div id="lightbox" class="lightbox" style="display:none;" onclick="this.style.display='none'">
+    <span class="lightbox-close">&times;</span>
+    <img id="lightbox-img" src="" />
+  </div>
+
+  <div id="view-twice-lightbox" class="lightbox" style="display:none;">
+    <span class="lightbox-close" style="z-index: 10;">&times;</span>
+    <div id="view-twice-content" style="pointer-events: auto; background: var(--color-surface-pearl); border: 1px solid var(--color-divider); padding: 16px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); min-width: 250px; max-width: 90vw; max-height: 90vh; overflow-y: auto;">
+    </div>
+  </div>
+
+  <script is:inline src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 </Layout>
 
 <style>
-  .chat-wrapper {
+  .chat-layout-wrapper {
+    display: flex;
+    height: calc(100dvh - 64px);
+    background: var(--color-canvas);
+    color: var(--color-ink);
+  }
+  
+  .chat-sidebar {
+    width: 280px;
+    background: var(--color-surface-pearl);
     display: flex;
     flex-direction: column;
-    height: calc(100dvh - 64px); /* Changed to dvh for mobile */
-    background: var(--color-surface-tile);
+    border-right: 1px solid var(--color-divider);
+  }
+
+  .sidebar-header {
+    box-sizing: border-box;
+    height: 60px;
+    min-height: 60px;
+    max-height: 60px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--color-divider);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+
+  .sidebar-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .sidebar-nav {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .badge {
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 12px;
+    margin-left: auto;
+    font-weight: 700;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    color: var(--color-ink-muted);
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .nav-item:hover {
+    background: rgba(255,255,255,0.05);
     color: var(--color-ink);
   }
 
+  .chat-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    height: 100%;
+    background: var(--color-surface-tile);
+    overflow: hidden;
+  }
+
+  @media (max-width: 768px) {
+    .chat-sidebar { display: none; }
+    .hide-mobile { display: none !important; }
+  }
+  @media (min-width: 769px) {
+    .hide-desktop { display: none !important; }
+  }
+
   .chat-header {
+    box-sizing: border-box;
     height: 60px;
+    min-height: 60px;
+    max-height: 60px;
     background: var(--color-surface-pearl);
     border-bottom: 1px solid var(--color-divider);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     display: flex;
     align-items: center;
     padding: 0 16px;
     gap: 16px;
+    z-index: 10;
+  }
+
+  .chat-header-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
   }
 
   .chat-header-info h2 {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  .header-username-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
   }
   
   .status-indicator {
@@ -110,17 +266,32 @@ const { friendId } = Astro.params;
 
   .message {
     max-width: 75%;
-    padding: 10px 16px;
-    border-radius: 22px;
+    padding: 8px 14px;
+    border-radius: 18px;
     font-size: 0.95rem;
     line-height: 1.4;
     word-wrap: break-word;
     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+  }
+
+  @media (max-width: 768px) {
+    .message {
+      max-width: 90%;
+    }
+  }
+
+  .msg-time {
+    font-size: 0.65rem;
+    opacity: 0.7;
+    align-self: flex-end;
+    margin-top: 2px;
   }
 
   .message.sent {
     align-self: flex-end;
-    background: linear-gradient(135deg, #0084ff, #0084ff); /* Messenger/Instagram blue */
+    background: var(--color-primary);
     color: white;
     border-bottom-right-radius: 4px;
   }
@@ -153,6 +324,186 @@ const { friendId } = Astro.params;
   
   .file-attachment:hover {
     opacity: 0.9;
+  }
+  
+  .media-blurred {
+    filter: blur(15px);
+    cursor: pointer;
+    transition: filter 0.3s ease;
+  }
+  
+  .media-unblurred {
+    filter: blur(0);
+  }
+  
+  .media-blur-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 8px;
+  }
+  
+  .media-content {
+    max-height: 250px;
+    width: 100%;
+    max-width: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.2);
+  }
+  
+  /* Handled by JS enterfullscreen/exitfullscreen events to avoid CSS specificity conflicts */
+  
+  .media-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 4px;
+    border-radius: 8px;
+    overflow: hidden;
+    max-width: 280px;
+  }
+  
+  .media-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    pointer-events: none;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .media-download-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    z-index: 10;
+    transition: background 0.2s;
+  }
+  
+  .media-download-btn:hover {
+    background: rgba(0,0,0,0.8);
+    color: white;
+  }
+  
+  .dl-spinner {
+    width: 20px;
+    height: 20px;
+    animation: rotate 2s linear infinite;
+  }
+  .dl-spinner circle {
+    stroke: currentColor;
+    stroke-width: 4;
+    stroke-dasharray: 1, 200;
+    stroke-dashoffset: 0;
+    animation: dash 1.5s ease-in-out infinite;
+    stroke-linecap: round;
+  }
+
+  .lightbox {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.9);
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .lightbox img {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+  }
+  .lightbox-close {
+    position: absolute;
+    top: 20px; right: 30px;
+    color: white;
+    font-size: 40px;
+    cursor: pointer;
+  }
+
+  .custom-audio {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(0,0,0,0.1);
+    padding: 6px 14px 6px 6px;
+    border-radius: 30px;
+    min-width: 180px;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 4px;
+  }
+  .message.sent .custom-audio {
+    background: rgba(255,255,255,0.15);
+  }
+  .custom-audio button {
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  }
+  .message.sent .custom-audio button {
+    background: white;
+    color: var(--color-primary);
+  }
+  .custom-audio .progress-container {
+    flex-grow: 1;
+    height: 4px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 2px;
+    position: relative;
+    cursor: pointer;
+  }
+  .custom-audio .progress-bar {
+    position: absolute;
+    top: 0; left: 0; height: 100%;
+    background: var(--color-primary);
+    border-radius: 2px;
+    width: 0%;
+  }
+  .message.sent .custom-audio .progress-bar {
+    background: white;
+  }
+  .custom-audio .audio-dl {
+    color: inherit;
+    text-decoration: none;
+    opacity: 0.8;
+  }
+  .custom-audio .audio-dl:hover { opacity: 1; }
+  
+  .file-name-trunc {
+    font-size: 0.8em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+    display: block;
   }
 
   @keyframes spin {
@@ -197,6 +548,11 @@ const { friendId } = Astro.params;
     color: var(--color-ink);
     outline: none;
     font-size: 0.95rem;
+  }
+  
+  .chat-input:focus,
+  .chat-input:focus-visible {
+    outline: none !important;
   }
 
   .chat-input:disabled {
@@ -259,25 +615,121 @@ const { friendId } = Astro.params;
   let sharedSecretKey: CryptoKey;
 
   document.addEventListener('DOMContentLoaded', () => {
+    const clearChatAction = async () => {
+      if (!confirm('Clear your copy of the chat history? This will not affect your friend.')) return;
+      const token = await window.Clerk?.session?.getToken();
+      await fetch(`${window.API_BASE_URL || ''}/api/messages/${FRIEND_ID}/clear`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const msgsContainer = document.getElementById('messages-container');
+      if (msgsContainer) msgsContainer.innerHTML = '';
+    };
+
+    document.getElementById('clear-chat-btn-desktop')?.addEventListener('click', clearChatAction);
+    document.getElementById('clear-chat-btn-mobile')?.addEventListener('click', () => {
+       document.getElementById('mobile-menu')!.style.display = 'none';
+       clearChatAction();
+    });
+    
+    document.getElementById('mobile-menu-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const menu = document.getElementById('mobile-menu');
+      if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', (e) => {
+       const wrapper = document.getElementById('mobile-menu-wrapper');
+       if (wrapper && !wrapper.contains(e.target as Node)) {
+          const menu = document.getElementById('mobile-menu');
+          if (menu) menu.style.display = 'none';
+       }
+    });
+
     const msgsContainer = document.getElementById('messages-container');
     const msgInput = document.getElementById('message-input') as HTMLInputElement;
     const sendBtn = document.getElementById('send-btn') as HTMLButtonElement;
     const form = document.getElementById('chat-form');
+    
+    const viewTwiceToggle = document.getElementById('view-twice-toggle');
+    let isViewTwice = false;
+    viewTwiceToggle?.addEventListener('click', () => {
+      isViewTwice = !isViewTwice;
+      viewTwiceToggle.innerHTML = isViewTwice ? '<span style="font-weight: 800; font-size: 1rem; font-family: monospace; color: var(--color-primary);">2x</span>' : '<span style="font-weight: 800; font-size: 1rem; font-family: monospace;">2x</span>';
+      viewTwiceToggle.style.color = isViewTwice ? 'var(--color-primary)' : 'var(--color-ink-muted)';
+    });
+
+    let currentAudioEl: HTMLAudioElement | null = null;
+    let currentPlayBtn: HTMLElement | null = null;
+
+    (window as any).toggleAudio = function(btn: HTMLElement) {
+      const container = btn.closest('.custom-audio');
+      if (!container) return;
+      const audioEl = container.querySelector('.hidden-audio') as HTMLAudioElement;
+      
+      if (currentAudioEl && currentAudioEl !== audioEl) {
+        currentAudioEl.pause();
+        if (currentPlayBtn) currentPlayBtn.innerHTML = '<i class="bi bi-play-fill"></i>';
+      }
+      
+      currentAudioEl = audioEl;
+      currentPlayBtn = btn;
+      
+      if (!audioEl.onended) {
+        audioEl.ontimeupdate = () => {
+          const progress = (audioEl.currentTime / (audioEl.duration || 1)) * 100;
+          const bar = container.querySelector('.progress-bar') as HTMLElement;
+          if (bar) bar.style.width = `${progress}%`;
+        };
+        audioEl.onended = () => {
+          btn.innerHTML = '<i class="bi bi-play-fill"></i>';
+          const bar = container.querySelector('.progress-bar') as HTMLElement;
+          if (bar) bar.style.width = '0%';
+        };
+      }
+      
+      if (audioEl.paused) {
+        audioEl.play().catch((e: any) => console.error("Audio playback error:", e));
+        btn.innerHTML = '<i class="bi bi-pause-fill"></i>';
+      } else {
+        audioEl.pause();
+        btn.innerHTML = '<i class="bi bi-play-fill"></i>';
+      }
+    };
+
+    (window as any).seekAudio = function(e: MouseEvent, container: HTMLElement) {
+      const audioWrapper = container.closest('.custom-audio');
+      if (!audioWrapper) return;
+      const audioEl = audioWrapper.querySelector('.hidden-audio') as HTMLAudioElement;
+      if (!audioEl || !audioEl.duration) return;
+      
+      const rect = container.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      audioEl.currentTime = percent * audioEl.duration;
+    };
+
+    (window as any).openLightbox = function(src: string) {
+      const lb = document.getElementById('lightbox');
+      const img = document.getElementById('lightbox-img') as HTMLImageElement;
+      if (lb && img) {
+        img.src = src;
+        lb.style.display = 'flex';
+      }
+    };
 
     function startChat() {
       // Fetch friend profile for header
-      window.Clerk?.session?.getToken().then(token => {
+      window.Clerk?.session?.getToken().then((token: string | null) => {
         return fetch(`${window.API_BASE_URL || ''}/api/users/${FRIEND_ID}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-      }).then(res => res.json()).then(user => {
+      }).then((res: Response) => res.json()).then((user: any) => {
           const nameEl = document.getElementById('chat-friend-name');
           const avatarContainer = document.getElementById('chat-header-avatar-container');
           if (avatarContainer && user.avatar) {
             avatarContainer.innerHTML = `<img src="${user.avatar}" class="chat-header-avatar" />`;
           }
           if (nameEl) {
-            nameEl.innerHTML = `${user.username} ${user.isAdmin ? '<div class="gold-verified-tick"><i class="bi bi-patch-check-fill"></i></div>' : ''}`;
+            nameEl.innerHTML = `<span class="header-username-text">${user.username}</span> ${user.isAdmin ? '<div class="gold-verified-tick"><i class="bi bi-patch-check-fill"></i></div>' : ''}`;
           }
       }).catch(console.error);
 
@@ -300,9 +752,36 @@ const { friendId } = Astro.params;
 
     if (window.Clerk && window.Clerk.isReady) {
       startChat();
+      fetchPendingBadge();
     } else {
-      window.addEventListener('load', () => setTimeout(startChat, 1000));
+      window.addEventListener('load', () => {
+        setTimeout(startChat, 1000);
+        setTimeout(fetchPendingBadge, 1000);
+      });
     }
+
+    async function fetchPendingBadge() {
+      try {
+        const token = await window.Clerk?.session?.getToken();
+        if (!token) return;
+        const res = await fetch(`${window.API_BASE_URL || ''}/api/friends`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const pending = data.friendships.filter((f: any) => f.status === 'pending');
+          const badge = document.getElementById('pending-badge');
+          if (badge) {
+            badge.textContent = pending.length.toString();
+            badge.style.display = pending.length > 0 ? 'inline-block' : 'none';
+          }
+        }
+      } catch (err) {}
+    }
+
+    window.addEventListener('circles:friend_request', fetchPendingBadge);
+    window.addEventListener('circles:friend_accepted', fetchPendingBadge);
+    window.addEventListener('circles:friend_removed', fetchPendingBadge);
 
     async function initE2E() {
       const e2e = await import('../../../scripts/e2e');
@@ -349,7 +828,7 @@ const { friendId } = Astro.params;
       );
       return {
         encryptedContent: arrayBufferToBase64(cipherBuffer),
-        iv: arrayBufferToBase64(iv)
+        iv: arrayBufferToBase64(iv.buffer)
       };
     }
 
@@ -379,20 +858,59 @@ const { friendId } = Astro.params;
         for (const msg of messages) {
           const plain = await decryptMessage(msg.encryptedContent, msg.iv);
           const fileData = msg.sharedFileId ? { id: msg.sharedFileId, name: msg.filename || 'Shared File' } : undefined;
-          appendMessage(plain, msg.senderId !== FRIEND_ID, fileData);
+          const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          appendMessage(plain, msg.senderId !== FRIEND_ID, fileData, time, msg.id, msg.isRead === 1, msg.maxViews, msg.viewCount);
         }
       }
     }
+
+    async function markRead() {
+      const token = await window.Clerk?.session?.getToken();
+      await fetch(`${window.API_BASE_URL || ''}/api/messages/${FRIEND_ID}/read`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    }
+
+    // Mark read when user interacts
+    window.addEventListener('focus', markRead);
+    document.addEventListener('click', markRead);
 
     function connectSSE() {
       window.addEventListener('circles:new_message', async (e: any) => {
         const msg = e.detail;
         if (msg.senderId === FRIEND_ID || msg.receiverId === FRIEND_ID) {
-           // Ensure it's not a duplicate if we just sent it (could check by ID in real app)
+           if (document.getElementById(`msg-${msg.id}`)) return; // Skip duplicates
            const plain = await decryptMessage(msg.encryptedContent, msg.iv);
            const fileData = msg.sharedFileId ? { id: msg.sharedFileId, name: msg.filename || 'Shared File' } : undefined;
-           appendMessage(plain, msg.senderId !== FRIEND_ID, fileData);
+           const time = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+           appendMessage(plain, msg.senderId !== FRIEND_ID, fileData, time, msg.id, false, msg.maxViews, msg.viewCount);
+           
+           if (msg.senderId === FRIEND_ID && document.hasFocus()) {
+             markRead();
+           }
         }
+      });
+
+      window.addEventListener('circles:message_deleted', (e: any) => {
+        const { messageId } = e.detail;
+        const msgEl = document.getElementById(`msg-${messageId}`);
+        if (msgEl) msgEl.remove();
+      });
+
+      window.addEventListener('circles:messages_read', (e: any) => {
+        const { readerId } = e.detail;
+        if (readerId === FRIEND_ID) {
+          const indicators = document.querySelectorAll('.message.sent .seen-indicator');
+          indicators.forEach(ind => {
+            ind.textContent = '✓✓';
+          });
+        }
+      });
+      
+      window.addEventListener('circles:chat_deleted_for_everyone', () => {
+        const msgsContainer = document.getElementById('messages-container');
+        if (msgsContainer) msgsContainer.innerHTML = '';
       });
       
       window.addEventListener('socket:connected', () => {
@@ -402,21 +920,203 @@ const { friendId } = Astro.params;
       });
     }
 
-    function appendMessage(text: string, isSent: boolean, file?: {id: number, name: string}) {
+    function appendMessage(text: string, isSent: boolean, file?: {id: number, name: string}, timestamp?: string, msgId?: number, isRead?: boolean, maxViews: number = 0, viewCount: number = 0) {
       const div = document.createElement('div');
       div.className = `message ${isSent ? 'sent' : 'received'}`;
+      if (msgId) div.id = `msg-${msgId}`;
+      
+      const contentWrapper = document.createElement('div');
+      contentWrapper.className = 'msg-content-wrapper';
       
       const textDiv = document.createElement('div');
       textDiv.textContent = text;
-      div.appendChild(textDiv);
+      contentWrapper.appendChild(textDiv);
       
       if (file) {
-        const fileLink = document.createElement('a');
-        fileLink.className = 'file-attachment';
-        fileLink.href = `${window.API_BASE_URL || ''}/api/shares/download/${file.id}`;
-        fileLink.target = '_blank';
-        fileLink.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg> <span>${file.name}</span>`;
-        div.appendChild(fileLink);
+        const fileContainer = document.createElement('div');
+        fileContainer.style.marginTop = '8px';
+        contentWrapper.appendChild(fileContainer);
+        
+        window.Clerk?.session?.getToken().then((token: string | null) => {
+          const downloadUrl = `${window.API_BASE_URL || ''}/api/shares/download/${file.id}?token=${token}`;
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          
+          if (['mp4', 'webm', 'ogg'].includes(ext as string)) {
+            const vidId = 'vid-' + Math.random().toString(36).substr(2, 9);
+            fileContainer.innerHTML = `
+              <div class="media-container">
+                <div class="media-badge"><i class="bi bi-camera-video-fill"></i> Video</div>
+                <a href="${downloadUrl}" download="${file.name}" class="media-download-btn secure-download" title="Download"><i class="bi bi-download"></i></a>
+                <div class="media-blur-wrapper media-blurred" onclick="this.classList.remove('media-blurred')">
+                  <video id="${vidId}" class="media-content" playsinline controls preload="metadata" style="width:100%; border-radius: 8px;">
+                    <source src="${downloadUrl}" type="video/${ext === 'ogg' ? 'ogg' : 'mp4'}">
+                  </video>
+                </div>
+              </div>
+              <div class="file-name-trunc" title="${file.name}">${file.name}</div>
+            `;
+            setTimeout(() => { 
+              if ((window as any).Plyr) {
+                const player = new (window as any).Plyr('#' + vidId, { controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'] });
+                player.on('enterfullscreen', () => {
+                  const v = document.getElementById(vidId);
+                  if (v) {
+                    v.style.maxHeight = 'none';
+                    v.style.height = '100%';
+                  }
+                });
+                player.on('exitfullscreen', () => {
+                  const v = document.getElementById(vidId);
+                  if (v) {
+                    v.style.maxHeight = ''; // Reverts to CSS class default
+                    v.style.height = '';
+                  }
+                });
+              }
+            }, 50);
+          } else if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext as string)) {
+            fileContainer.innerHTML = `
+              <div class="custom-audio" data-src="${downloadUrl}">
+                <button class="play-btn" onclick="window.toggleAudio(this)"><i class="bi bi-play-fill"></i></button>
+                <div class="progress-container" onclick="window.seekAudio(event, this)"><div class="progress-bar"></div></div>
+                <a href="${downloadUrl}" download="${file.name}" class="audio-dl secure-download"><i class="bi bi-download"></i></a>
+                <audio class="hidden-audio" src="${downloadUrl}" preload="metadata" style="display:none;"></audio>
+              </div>
+              <div class="file-name-trunc" title="${file.name}">${file.name}</div>
+            `;
+          } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext as string)) {
+            fileContainer.innerHTML = `
+              <div class="media-container">
+                <div class="media-badge"><i class="bi bi-image"></i> Image</div>
+                <a href="${downloadUrl}" download="${file.name}" class="media-download-btn secure-download" title="Download"><i class="bi bi-download"></i></a>
+                <div class="media-blur-wrapper media-blurred" onclick="this.classList.remove('media-blurred'); window.openLightbox('${downloadUrl}'); event.stopPropagation()">
+                  <img src="${downloadUrl}" class="media-content" alt="${file.name}">
+                </div>
+              </div>
+              <div class="file-name-trunc" title="${file.name}">${file.name}</div>
+            `;
+          } else {
+            fileContainer.innerHTML = `<a class="file-attachment secure-download" href="${downloadUrl}" download="${file.name}">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg> 
+              <span class="file-name-trunc" style="max-width:150px;">${file.name}</span>
+            </a>`;
+          }
+          msgsContainer!.scrollTop = msgsContainer!.scrollHeight;
+        });
+      }
+      
+      if (maxViews > 0) {
+        if (isSent) {
+             const maskDiv = document.createElement('div');
+             maskDiv.className = 'masked-msg-overlay';
+             maskDiv.style.padding = '12px 16px';
+             maskDiv.style.background = 'rgba(0,0,0,0.2)';
+             maskDiv.style.borderRadius = '12px';
+             maskDiv.style.display = 'flex';
+             maskDiv.style.alignItems = 'center';
+             maskDiv.style.gap = '8px';
+             maskDiv.style.backdropFilter = 'blur(10px)';
+             const typeText = file ? 'Media' : 'Message';
+             maskDiv.innerHTML = `<span style="font-weight: 800; font-family: monospace;">2x</span> ${typeText}`;
+             
+             contentWrapper.style.display = 'none';
+             div.appendChild(maskDiv);
+             div.appendChild(contentWrapper);
+        } else {
+          if (viewCount < maxViews) {
+             const maskDiv = document.createElement('div');
+             maskDiv.className = 'masked-msg-overlay';
+             maskDiv.style.cursor = 'pointer';
+             maskDiv.style.padding = '12px 16px';
+             maskDiv.style.background = 'rgba(0,0,0,0.2)';
+             maskDiv.style.borderRadius = '12px';
+             maskDiv.style.display = 'flex';
+             maskDiv.style.alignItems = 'center';
+             maskDiv.style.gap = '8px';
+             maskDiv.style.backdropFilter = 'blur(10px)';
+             maskDiv.innerHTML = `<span style="font-weight: 800; font-family: monospace;">2x</span> View Message`;
+             
+             contentWrapper.style.display = 'none';
+             maskDiv.onclick = async () => {
+                const token = await window.Clerk?.session?.getToken();
+                const res = await fetch(`${window.API_BASE_URL || ''}/api/messages/${msgId}/view`, {
+                   method: 'PUT',
+                   headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data.success) {
+                   const isExhausted = data.deleted || (data.viewCount && data.viewCount >= maxViews);
+                   
+                   const lb = document.getElementById('view-twice-lightbox')!;
+                   const lbContent = document.getElementById('view-twice-content')!;
+                   lbContent.innerHTML = '';
+                   
+                   contentWrapper.style.display = 'block';
+                   lbContent.appendChild(contentWrapper);
+                   lb.style.display = 'flex';
+                   
+                   lb.onclick = async (e) => {
+                      if (e.target === lb || (e.target as HTMLElement).classList.contains('lightbox-close')) {
+                         lb.style.display = 'none';
+                         contentWrapper.style.display = 'none';
+                         div.appendChild(contentWrapper);
+                         
+                         // Pause any playing media
+                         const audios = contentWrapper.querySelectorAll('audio');
+                         audios.forEach(a => a.pause());
+                         const videos = contentWrapper.querySelectorAll('video');
+                         videos.forEach(v => v.pause());
+                         const playBtns = contentWrapper.querySelectorAll('.play-btn');
+                         playBtns.forEach(btn => btn.innerHTML = '<i class="bi bi-play-fill"></i>');
+                         
+                         if (isExhausted) {
+                           // Call exhaust endpoint to delete from GDrive
+                           fetch(`${window.API_BASE_URL || ''}/api/messages/${msgId}/exhaust`, {
+                              method: 'DELETE',
+                              headers: { 'Authorization': `Bearer ${token}` }
+                           }).catch(console.error);
+                           
+                           maskDiv.style.opacity = '0.5';
+                           maskDiv.innerHTML = `<span style="font-weight: 800; font-family: monospace;">2x</span> Viewed`;
+                           maskDiv.onclick = null;
+                         } else {
+                           maskDiv.innerHTML = `<span style="font-weight: 800; font-family: monospace;">2x</span> View Message`;
+                         }
+                      }
+                   };
+                }
+             };
+             div.appendChild(maskDiv);
+             div.appendChild(contentWrapper);
+          } else {
+             // Exhausted
+             const maskDiv = document.createElement('div');
+             maskDiv.className = 'masked-msg-overlay';
+             maskDiv.style.padding = '8px 12px';
+             maskDiv.style.opacity = '0.5';
+             maskDiv.innerHTML = `<span style="font-weight: 800; font-family: monospace;">2x</span> Viewed`;
+             div.appendChild(maskDiv);
+          }
+        }
+      } else {
+        div.appendChild(contentWrapper);
+      }
+      
+      if (timestamp) {
+        const timeDiv = document.createElement('span');
+        timeDiv.className = 'msg-time';
+        timeDiv.textContent = timestamp;
+        div.appendChild(timeDiv);
+      }
+
+      if (isSent && msgId) {
+        const seenDiv = document.createElement('span');
+        seenDiv.className = 'seen-indicator';
+        seenDiv.style.fontSize = '0.7rem';
+        seenDiv.style.opacity = '0.7';
+        seenDiv.style.marginLeft = '4px';
+        seenDiv.textContent = isRead ? '✓✓' : '✓';
+        div.appendChild(seenDiv);
       }
       
       msgsContainer?.appendChild(div);
@@ -431,15 +1131,24 @@ const { friendId } = Astro.params;
       msgInput.value = '';
       const { encryptedContent, iv } = await encryptMessage(text);
       
+      const maxViews = isViewTwice ? 2 : 0;
+      isViewTwice = false;
+      if (viewTwiceToggle) {
+        viewTwiceToggle.innerHTML = '<span style="font-weight: 800; font-size: 1rem; font-family: monospace;">2x</span>';
+        viewTwiceToggle.style.color = 'var(--color-ink-muted)';
+      }
+      
       const token = await window.Clerk?.session?.getToken();
-      await fetch(`${window.API_BASE_URL || ''}/api/messages/${FRIEND_ID}`, {
+      const res = await fetch(`${window.API_BASE_URL || ''}/api/messages/${FRIEND_ID}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ encryptedContent, iv })
+        body: JSON.stringify({ encryptedContent, iv, maxViews })
       });
+      const data = await res.json();
       
       // We append locally since we sent it
-      appendMessage(text, true);
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      appendMessage(text, true, undefined, time, data.message?.id, false, maxViews, 0);
     });
 
     const fileInput = document.getElementById('file-input') as HTMLInputElement;
@@ -452,19 +1161,36 @@ const { friendId } = Astro.params;
     // Handle authenticated file downloads
     document.addEventListener('click', async (e) => {
       const target = e.target as HTMLElement;
-      const fileLink = target.closest('.file-attachment') as HTMLAnchorElement;
+      const fileLink = target.closest('.secure-download') as HTMLAnchorElement;
       if (fileLink) {
         e.preventDefault();
-        try {
+        e.stopPropagation();
+        if (fileLink.classList.contains('downloading')) return;
+        
+        const originalHtml = fileLink.innerHTML;
+        fileLink.classList.add('downloading');
+        
+        // If it's a small button, replace innerHTML with spinner. For generic attachment, just append or replace icon.
+        if (fileLink.classList.contains('media-download-btn') || fileLink.classList.contains('audio-dl')) {
+          fileLink.innerHTML = '<svg class="dl-spinner" viewBox="25 25 50 50"><circle cx="50" cy="50" r="20" fill="none" /></svg>';
+        } else {
           fileLink.style.opacity = '0.5';
+        }
+
+        try {
           const token = await window.Clerk?.session?.getToken();
-          const res = await fetch(fileLink.href, {
+          // Extract base URL to avoid token duplication if token is already in href
+          let fetchUrl = fileLink.href;
+          if (fetchUrl.includes('?token=')) {
+            fetchUrl = fetchUrl.split('?token=')[0];
+          }
+          
+          const res = await fetch(fetchUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (!res.ok) throw new Error('Download failed');
           
-          // Get filename from Content-Disposition if available
-          let filename = 'downloaded_file';
+          let filename = fileLink.getAttribute('download') || 'downloaded_file';
           const disposition = res.headers.get('Content-Disposition');
           if (disposition && disposition.includes('filename=')) {
             const matches = /filename="([^"]+)"/.exec(disposition);
@@ -480,10 +1206,13 @@ const { friendId } = Astro.params;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
         } catch (err) {
           console.error('File download error', err);
           alert('Failed to download file.');
         } finally {
+          fileLink.classList.remove('downloading');
+          fileLink.innerHTML = originalHtml;
           fileLink.style.opacity = '1';
         }
       }
@@ -491,63 +1220,72 @@ const { friendId } = Astro.params;
     
     fileInput?.addEventListener('change', async () => {
       if (!fileInput.files || fileInput.files.length === 0) return;
-      const file = fileInput.files[0];
+      const files = Array.from(fileInput.files);
       
-      // Disable inputs during upload
+      // Disable upload btn during upload
       uploadBtn.disabled = true;
-      msgInput.disabled = true;
       
-      // Optimistic UI for upload
-      const tempMsgDiv = document.createElement('div');
-      tempMsgDiv.className = 'message sent';
-      tempMsgDiv.style.opacity = '0.7';
-      tempMsgDiv.innerHTML = `<div style="display: flex; align-items: center; gap: 8px;">
-        <svg class="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
-          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
-        </svg>
-        <span>Uploading ${file.name}...</span>
-      </div>`;
-      msgsContainer?.appendChild(tempMsgDiv);
-      msgsContainer!.scrollTop = msgsContainer!.scrollHeight;
-      
-      try {
-        const token = await window.Clerk?.session?.getToken();
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('friendId', FRIEND_ID || '');
-        
-        const uploadRes = await fetch(`${window.API_BASE_URL || ''}/api/shares/upload`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        });
-        
-        if (!uploadRes.ok) throw new Error('Upload failed');
-        const uploadData = await uploadRes.json();
-        const sharedFileId = uploadData.sharedFile.id;
-        const filename = uploadData.file.filename;
-        
-        const text = `Shared a file`;
-        const { encryptedContent, iv } = await encryptMessage(text);
-        
-        await fetch(`${window.API_BASE_URL || ''}/api/messages/${FRIEND_ID}`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ encryptedContent, iv, sharedFileId })
-        });
-        
-        tempMsgDiv.remove();
-        appendMessage(text, true, { id: sharedFileId, name: filename });
-      } catch (err) {
-        console.error('File share failed', err);
-        tempMsgDiv.remove();
-        alert('Failed to share file.');
-      } finally {
-        fileInput.value = '';
-        uploadBtn.disabled = false;
-        msgInput.disabled = false;
+      // Store view twice state for all files in this batch
+      const maxViews = isViewTwice ? 2 : 0;
+      isViewTwice = false;
+      if (viewTwiceToggle) {
+        viewTwiceToggle.innerHTML = '<span style="font-weight: 800; font-size: 1rem; font-family: monospace;">2x</span>';
+        viewTwiceToggle.style.color = 'var(--color-ink-muted)';
       }
+
+      for (const file of files) {
+        // Optimistic UI for upload
+        const tempMsgDiv = document.createElement('div');
+        tempMsgDiv.className = 'message sent';
+        tempMsgDiv.style.opacity = '0.7';
+        tempMsgDiv.innerHTML = `<div style="display: flex; align-items: center; gap: 8px;">
+          <svg class="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+          </svg>
+          <span>Uploading ${file.name}...</span>
+        </div>`;
+        msgsContainer?.appendChild(tempMsgDiv);
+        msgsContainer!.scrollTop = msgsContainer!.scrollHeight;
+        
+        try {
+          const token = await window.Clerk?.session?.getToken();
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('friendId', FRIEND_ID || '');
+          
+          const uploadRes = await fetch(`${window.API_BASE_URL || ''}/api/shares/upload`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+          });
+          
+          if (!uploadRes.ok) throw new Error('Upload failed');
+          const uploadData = await uploadRes.json();
+          const sharedFileId = uploadData.sharedFile.id;
+          const filename = uploadData.file.filename;
+          
+          const text = `Shared a file`;
+          const { encryptedContent, iv } = await encryptMessage(text);
+          
+          await fetch(`${window.API_BASE_URL || ''}/api/messages/${FRIEND_ID}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ encryptedContent, iv, sharedFileId, maxViews })
+          });
+          
+          tempMsgDiv.remove();
+          const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          appendMessage(text, true, { id: sharedFileId, name: filename }, time, undefined, false, maxViews, 0);
+        } catch (err) {
+          console.error('File share failed for', file.name, err);
+          tempMsgDiv.remove();
+          alert(`Failed to share file: ${file.name}`);
+        }
+      }
+
+      fileInput.value = '';
+      uploadBtn.disabled = false;
     });
 
   });

@@ -7,6 +7,7 @@ import { upload } from '../middlewares/upload.js';
 import { buildStorageKey } from '../storage/adapter.js';
 import { getDynamicSecurityConfig } from '../services/config.service.js';
 import { validateUploadCandidate } from '../services/validation.service.js';
+import { clerkClient } from '../auth/clerk.js';
 
 export function createShareRoutes(resolveStorage: StorageResolverFn) {
   const router = Router();
@@ -235,15 +236,25 @@ export function createShareRoutes(resolveStorage: StorageResolverFn) {
           [session] = await db.insert(academicSessions).values({ userId: friendId, name: sessionName }).returning();
         }
 
-        subjectName = `Shared with Uploader`; // generic name, or ideally 'Shared by [uploaderName]' but we don't have it here easily
+        // Fetch uploader's username to use as subject/folder name
+        let uploaderName = 'Unknown User';
+        try {
+          const clerkUser = await clerkClient.users.getUser(uploaderId);
+          uploaderName = clerkUser.username || (clerkUser.firstName && clerkUser.lastName ? `${clerkUser.firstName} ${clerkUser.lastName}` : (clerkUser.firstName || 'Unknown User'));
+        } catch (e) {
+          console.warn('Failed to fetch uploader info from clerk for folder naming');
+        }
+
+        subjectName = uploaderName;
         let [subject] = await db.select().from(subjects).where(and(eq(subjects.sessionId, session.id), eq(subjects.name, subjectName))).limit(1);
         if (!subject) {
           [subject] = await db.insert(subjects).values({ sessionId: session.id, userId: friendId, name: subjectName }).returning();
         }
 
-        let [work] = await db.select().from(works).where(and(eq(works.subjectId, subject.id), eq(works.title, 'Incoming'))).limit(1);
+        workTitle = ''; // Emitted to skip nesting in adapter
+        let [work] = await db.select().from(works).where(and(eq(works.subjectId, subject.id), eq(works.title, 'Files'))).limit(1);
         if (!work) {
-          [work] = await db.insert(works).values({ subjectId: subject.id, userId: friendId, title: 'Incoming' }).returning();
+          [work] = await db.insert(works).values({ subjectId: subject.id, userId: friendId, title: 'Files' }).returning();
         }
         targetWorkId = work.id;
       }

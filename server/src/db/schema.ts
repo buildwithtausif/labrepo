@@ -292,6 +292,11 @@ export const messages = pgTable(
     iv: text('iv').notNull(),
     sharedFileId: integer('shared_file_id').references(() => sharedFiles.id, { onDelete: 'set null' }),
     isRead: integer('is_read').notNull().default(0),
+    visibleToSender: integer('visible_to_sender').notNull().default(1),
+    visibleToReceiver: integer('visible_to_receiver').notNull().default(1),
+    expiresAt: text('expires_at'),
+    maxViews: integer('max_views').notNull().default(0),
+    viewCount: integer('view_count').notNull().default(0),
     createdAt: text('created_at').notNull().default(nowIso),
   },
   (table) => [

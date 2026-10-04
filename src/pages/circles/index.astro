@@ -508,6 +508,12 @@ if (!userId) {
       });
     });
 
+    const initialHash = window.location.hash.substring(1);
+    if (initialHash && ['all', 'pending', 'discover', 'settings'].includes(initialHash)) {
+      const targetBtn = document.querySelector(`.nav-item[data-tab="${initialHash}"]`) as HTMLElement;
+      if (targetBtn) targetBtn.click();
+    }
+
     async function fetchFriends() {
       try {
         if (!window.Clerk || !window.Clerk.session) {

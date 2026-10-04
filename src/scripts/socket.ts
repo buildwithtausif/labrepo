@@ -56,6 +56,18 @@ export async function initClientSocket() {
     window.dispatchEvent(new CustomEvent('circles:new_message', { detail: data }));
   });
 
+  socket.on('message_deleted', (data) => {
+    window.dispatchEvent(new CustomEvent('circles:message_deleted', { detail: data }));
+  });
+
+  socket.on('messages_read', (data) => {
+    window.dispatchEvent(new CustomEvent('circles:messages_read', { detail: data }));
+  });
+
+  socket.on('chat_deleted_for_everyone', (data) => {
+    window.dispatchEvent(new CustomEvent('circles:chat_deleted_for_everyone', { detail: data }));
+  });
+
   return socket;
 }
 
