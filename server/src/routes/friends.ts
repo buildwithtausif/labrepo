@@ -17,6 +17,21 @@ function getAvatar(user: any) {
 }
 
 // List all friendships for the current user
+friendRoutes.get('/api/users/:id', async (req, res) => {
+  try {
+    const user = await clerkClient.users.getUser(req.params.id);
+    const adminId = process.env.ADMIN_USER_ID || process.env.CLERK_ADMIN_USER_ID;
+    const isAdmin = user.id === adminId || user.publicMetadata?.role === 'admin';
+    res.json({
+      username: getUsername(user),
+      avatar: getAvatar(user),
+      isAdmin
+    });
+  } catch (err: any) {
+    res.status(404).json({ error: 'User not found' });
+  }
+});
+
 friendRoutes.get('/api/friends', async (req, res) => {
   const db = getDb();
   const userId = req.userId!;

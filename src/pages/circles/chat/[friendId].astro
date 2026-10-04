@@ -15,6 +15,7 @@ const { friendId } = Astro.params;
       <a href="/circles" class="btn btn--ghost btn--sm back-btn">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
       </a>
+      <div id="chat-header-avatar-container"></div>
       <div class="chat-header-info">
         <h2 id="chat-friend-name">Loading...</h2>
         <span class="status-indicator">E2E Encrypted</span>
@@ -72,6 +73,30 @@ const { friendId } = Astro.params;
     color: var(--color-success);
     font-weight: 700;
   }
+</style>
+
+<style is:global>
+  .chat-header-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  
+  #chat-friend-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .chat-header-info .gold-verified-tick i {
+    background: linear-gradient(135deg, #fff3a1 0%, #d4af37 45%, #ffdf73 60%, #a67b14 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 15px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 2px rgba(212,175,55,0.6));
+  }
 
   .chat-messages {
     flex-grow: 1;
@@ -79,28 +104,63 @@ const { friendId } = Astro.params;
     padding: 24px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 8px;
+    background: var(--color-canvas);
   }
 
   .message {
-    max-width: 70%;
-    padding: 10px 14px;
-    border-radius: 8px;
+    max-width: 75%;
+    padding: 10px 16px;
+    border-radius: 22px;
+    font-size: 0.95rem;
     line-height: 1.4;
+    word-wrap: break-word;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
   }
 
   .message.sent {
     align-self: flex-end;
-    background: var(--color-primary);
+    background: linear-gradient(135deg, #0084ff, #0084ff); /* Messenger/Instagram blue */
     color: white;
-    border-bottom-right-radius: 2px;
+    border-bottom-right-radius: 4px;
   }
 
   .message.received {
     align-self: flex-start;
     background: var(--color-surface-pearl);
+    color: var(--color-ink);
     border: 1px solid var(--color-divider);
-    border-bottom-left-radius: 2px;
+    border-bottom-left-radius: 4px;
+  }
+  
+  .file-attachment {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(0,0,0,0.1);
+    padding: 12px;
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    margin-top: 4px;
+    border: 1px solid rgba(255,255,255,0.1);
+    cursor: pointer;
+  }
+  .message.received .file-attachment {
+    background: rgba(0,0,0,0.03);
+    border: 1px solid var(--color-divider);
+  }
+  
+  .file-attachment:hover {
+    opacity: 0.9;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .animate-spin {
+    animation: spin 1s linear infinite;
   }
 
   .chat-input-area {
@@ -205,6 +265,22 @@ const { friendId } = Astro.params;
     const form = document.getElementById('chat-form');
 
     function startChat() {
+      // Fetch friend profile for header
+      window.Clerk?.session?.getToken().then(token => {
+        return fetch(`${window.API_BASE_URL || ''}/api/users/${FRIEND_ID}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      }).then(res => res.json()).then(user => {
+          const nameEl = document.getElementById('chat-friend-name');
+          const avatarContainer = document.getElementById('chat-header-avatar-container');
+          if (avatarContainer && user.avatar) {
+            avatarContainer.innerHTML = `<img src="${user.avatar}" class="chat-header-avatar" />`;
+          }
+          if (nameEl) {
+            nameEl.innerHTML = `${user.username} ${user.isAdmin ? '<div class="gold-verified-tick"><i class="bi bi-patch-check-fill"></i></div>' : ''}`;
+          }
+      }).catch(console.error);
+
       initE2E().then(() => {
         msgsContainer!.innerHTML = ''; // Clear loading
         return fetchHistory();
@@ -302,7 +378,8 @@ const { friendId } = Astro.params;
         const { messages } = await res.json();
         for (const msg of messages) {
           const plain = await decryptMessage(msg.encryptedContent, msg.iv);
-          appendMessage(plain, msg.senderId !== FRIEND_ID);
+          const fileData = msg.sharedFileId ? { id: msg.sharedFileId, name: msg.filename || 'Shared File' } : undefined;
+          appendMessage(plain, msg.senderId !== FRIEND_ID, fileData);
         }
       }
     }
@@ -313,7 +390,8 @@ const { friendId } = Astro.params;
         if (msg.senderId === FRIEND_ID || msg.receiverId === FRIEND_ID) {
            // Ensure it's not a duplicate if we just sent it (could check by ID in real app)
            const plain = await decryptMessage(msg.encryptedContent, msg.iv);
-           appendMessage(plain, msg.senderId !== FRIEND_ID);
+           const fileData = msg.sharedFileId ? { id: msg.sharedFileId, name: msg.filename || 'Shared File' } : undefined;
+           appendMessage(plain, msg.senderId !== FRIEND_ID, fileData);
         }
       });
       
@@ -324,10 +402,23 @@ const { friendId } = Astro.params;
       });
     }
 
-    function appendMessage(text: string, isSent: boolean) {
+    function appendMessage(text: string, isSent: boolean, file?: {id: number, name: string}) {
       const div = document.createElement('div');
       div.className = `message ${isSent ? 'sent' : 'received'}`;
-      div.textContent = text;
+      
+      const textDiv = document.createElement('div');
+      textDiv.textContent = text;
+      div.appendChild(textDiv);
+      
+      if (file) {
+        const fileLink = document.createElement('a');
+        fileLink.className = 'file-attachment';
+        fileLink.href = `${window.API_BASE_URL || ''}/api/shares/download/${file.id}`;
+        fileLink.target = '_blank';
+        fileLink.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg> <span>${file.name}</span>`;
+        div.appendChild(fileLink);
+      }
+      
       msgsContainer?.appendChild(div);
       msgsContainer!.scrollTop = msgsContainer!.scrollHeight;
     }
@@ -349,6 +440,114 @@ const { friendId } = Astro.params;
       
       // We append locally since we sent it
       appendMessage(text, true);
+    });
+
+    const fileInput = document.getElementById('file-input') as HTMLInputElement;
+    const uploadBtn = document.getElementById('upload-btn') as HTMLButtonElement;
+    
+    uploadBtn?.addEventListener('click', () => {
+      fileInput.click();
+    });
+    
+    // Handle authenticated file downloads
+    document.addEventListener('click', async (e) => {
+      const target = e.target as HTMLElement;
+      const fileLink = target.closest('.file-attachment') as HTMLAnchorElement;
+      if (fileLink) {
+        e.preventDefault();
+        try {
+          fileLink.style.opacity = '0.5';
+          const token = await window.Clerk?.session?.getToken();
+          const res = await fetch(fileLink.href, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error('Download failed');
+          
+          // Get filename from Content-Disposition if available
+          let filename = 'downloaded_file';
+          const disposition = res.headers.get('Content-Disposition');
+          if (disposition && disposition.includes('filename=')) {
+            const matches = /filename="([^"]+)"/.exec(disposition);
+            if (matches != null && matches[1]) filename = matches[1];
+          }
+
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error('File download error', err);
+          alert('Failed to download file.');
+        } finally {
+          fileLink.style.opacity = '1';
+        }
+      }
+    });
+    
+    fileInput?.addEventListener('change', async () => {
+      if (!fileInput.files || fileInput.files.length === 0) return;
+      const file = fileInput.files[0];
+      
+      // Disable inputs during upload
+      uploadBtn.disabled = true;
+      msgInput.disabled = true;
+      
+      // Optimistic UI for upload
+      const tempMsgDiv = document.createElement('div');
+      tempMsgDiv.className = 'message sent';
+      tempMsgDiv.style.opacity = '0.7';
+      tempMsgDiv.innerHTML = `<div style="display: flex; align-items: center; gap: 8px;">
+        <svg class="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+        </svg>
+        <span>Uploading ${file.name}...</span>
+      </div>`;
+      msgsContainer?.appendChild(tempMsgDiv);
+      msgsContainer!.scrollTop = msgsContainer!.scrollHeight;
+      
+      try {
+        const token = await window.Clerk?.session?.getToken();
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('friendId', FRIEND_ID || '');
+        
+        const uploadRes = await fetch(`${window.API_BASE_URL || ''}/api/shares/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        
+        if (!uploadRes.ok) throw new Error('Upload failed');
+        const uploadData = await uploadRes.json();
+        const sharedFileId = uploadData.sharedFile.id;
+        const filename = uploadData.file.filename;
+        
+        const text = `Shared a file`;
+        const { encryptedContent, iv } = await encryptMessage(text);
+        
+        await fetch(`${window.API_BASE_URL || ''}/api/messages/${FRIEND_ID}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ encryptedContent, iv, sharedFileId })
+        });
+        
+        tempMsgDiv.remove();
+        appendMessage(text, true, { id: sharedFileId, name: filename });
+      } catch (err) {
+        console.error('File share failed', err);
+        tempMsgDiv.remove();
+        alert('Failed to share file.');
+      } finally {
+        fileInput.value = '';
+        uploadBtn.disabled = false;
+        msgInput.disabled = false;
+      }
     });
 
   });

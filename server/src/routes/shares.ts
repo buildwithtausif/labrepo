@@ -270,13 +270,13 @@ export function createShareRoutes(resolveStorage: StorageResolverFn) {
 
       // Optionally, automatically create a shared_files record so the sender still has access?
       // Yes, this makes sense so they can see what they sent.
-      await db.insert(sharedFiles).values({
+      const [newSharedFile] = await db.insert(sharedFiles).values({
         fileId: newFile.id,
         senderId: uploaderId,
         receiverId: friendId,
-      });
+      }).returning();
 
-      res.status(201).json({ success: true, file: newFile });
+      res.status(201).json({ success: true, file: newFile, sharedFile: newSharedFile });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to upload directly', details: err.message });
     }

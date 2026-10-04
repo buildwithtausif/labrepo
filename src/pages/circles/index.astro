@@ -795,5 +795,36 @@ if (!userId) {
     window.addEventListener('circles:friend_accepted', () => { fetchFriends(); });
     window.addEventListener('circles:friend_removed', () => { fetchFriends(); });
     window.addEventListener('socket:connected', () => { fetchFriends(); });
+    
+    // Show toast for new message
+    window.addEventListener('circles:new_message', (e: any) => {
+      const msg = e.detail;
+      // Don't notify if we sent it
+      if (msg.senderId === window.Clerk?.user?.id) return;
+      
+      const toast = document.createElement('div');
+      toast.style.position = 'fixed';
+      toast.style.bottom = '80px';
+      toast.style.right = '20px';
+      toast.style.background = 'var(--color-primary)';
+      toast.style.color = 'white';
+      toast.style.padding = '12px 20px';
+      toast.style.borderRadius = '8px';
+      toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+      toast.style.zIndex = '9999';
+      toast.style.cursor = 'pointer';
+      toast.innerHTML = `<strong>New Message</strong><br/>You have a new secure message.`;
+      
+      toast.onclick = () => {
+        window.location.href = `/circles/chat/${msg.senderId}`;
+      };
+      
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => toast.remove(), 500);
+      }, 5000);
+    });
   });
 </script>

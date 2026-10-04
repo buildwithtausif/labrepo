@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/runtime.js';
-import { messages, userKeys, friendships } from '../db/schema.js';
+import { messages, userKeys, friendships, sharedFiles, files } from '../db/schema.js';
 import { eq, and, or, sql } from 'drizzle-orm';
 import { EventEmitter } from 'events';
 
@@ -80,8 +80,20 @@ messageRoutes.get('/api/messages/:friendId', async (req, res) => {
     }
 
     const history = await db
-      .select()
+      .select({
+        id: messages.id,
+        senderId: messages.senderId,
+        receiverId: messages.receiverId,
+        encryptedContent: messages.encryptedContent,
+        iv: messages.iv,
+        sharedFileId: messages.sharedFileId,
+        isRead: messages.isRead,
+        createdAt: messages.createdAt,
+        filename: sql<string | null>`${files.filename}`.as('filename'),
+      })
       .from(messages)
+      .leftJoin(sharedFiles, eq(messages.sharedFileId, sharedFiles.id))
+      .leftJoin(files, eq(sharedFiles.fileId, files.id))
       .where(
         or(
           and(eq(messages.senderId, userId), eq(messages.receiverId, friendId)),
