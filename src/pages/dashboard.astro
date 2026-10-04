@@ -11,7 +11,7 @@ const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
 const ADMIN_USER_ID = env.ADMIN_USER_ID?.trim() || import.meta.env.ADMIN_USER_ID;
 const CLERK_ADMIN_USER_ID = env.CLERK_ADMIN_USER_ID?.trim() || import.meta.env.CLERK_ADMIN_USER_ID;
 const isAdmin = userId === ADMIN_USER_ID || userId === CLERK_ADMIN_USER_ID;
-const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 10) / (1024 * 1024));
+const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '1073741824', 10) / (1024 * 1024));
 ---
 
 <Layout title="Dashboard">

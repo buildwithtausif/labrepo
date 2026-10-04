@@ -41,7 +41,7 @@ const CLERK_ADMIN_USER_ID = env.CLERK_ADMIN_USER_ID?.trim() || import.meta.env.C
 const isAdmin = userId && (userId === ADMIN_USER_ID || userId === CLERK_ADMIN_USER_ID);
 const isDev = env.ENV?.trim() === 'development';
 const devRole = (Astro.locals as any).devRole || 'devadmin';
-const maxUploadSize = parseInt(env.MAX_UPLOAD_SIZE || '26214400', 10);
+const maxUploadSize = parseInt(env.MAX_UPLOAD_SIZE || '1073741824', 10);
 const maxUploadSizeMb = Math.round(maxUploadSize / (1024 * 1024));
 ---
 

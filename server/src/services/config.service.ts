@@ -14,7 +14,8 @@ const DEFAULT_ALLOWED_EXTENSIONS = [
   'feather', 'pkl', 'joblib', 'onnx', 'pt', 'pth', 'keras', 'h5',
   'env', 'sh', 'bat', 'ps1', 'toml', 'ini', 'cfg', 'conf', 'log', 'dockerfile',
   'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'tex','png','jpg','jpeg','webp',
-  'svg','ico','penpot','psd'
+  'svg','ico','penpot','psd',
+  'mp4', 'webm', 'ogg', 'mp3'
 ];
 
 function parseNumberEnv(name: string, fallback: number): number {
@@ -35,12 +36,18 @@ function parseListEnv(name: string, fallback: string[]): string[] {
 }
 
 export function getSecurityConfig(): SecurityConfig {
+  const envExtensions = parseListEnv('ALLOWED_FILE_TYPES', []);
+  const replaceExtensions = parseListEnv('REPLACE_FILE_TYPES', []);
+  const finalExtensions = replaceExtensions.length > 0
+    ? replaceExtensions
+    : [...DEFAULT_ALLOWED_EXTENSIONS, ...envExtensions];
+
   return {
-    maxUploadBytes: parseNumberEnv('MAX_UPLOAD_SIZE', 25 * 1024 * 1024),
+    maxUploadBytes: parseNumberEnv('MAX_UPLOAD_SIZE', 1024 * 1024 * 1024),
     loginRateLimit: parseNumberEnv('LOGIN_RATE_LIMIT', 10),
     uploadRateLimit: parseNumberEnv('UPLOADS_PER_MINUTE', 20),
     maxRepositories: parseNumberEnv('MAX_REPOSITORIES', 50),
-    allowedExtensions: parseListEnv('ALLOWED_FILE_TYPES', DEFAULT_ALLOWED_EXTENSIONS),
+    allowedExtensions: Array.from(new Set(finalExtensions)),
   };
 }
 

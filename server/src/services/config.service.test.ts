@@ -21,7 +21,17 @@ test('getSecurityConfig respects environment overrides', () => {
   assert.equal(config.loginRateLimit, 7);
   assert.equal(config.uploadRateLimit, 8);
   assert.equal(config.maxRepositories, 9);
-  assert.deepEqual(config.allowedExtensions, ['py', 'txt', 'md']);
+  
+  // Test append behavior
+  assert.ok(config.allowedExtensions.includes('py'));
+  assert.ok(config.allowedExtensions.includes('txt'));
+  assert.ok(config.allowedExtensions.includes('md'));
+  
+  // Also test REPLACE_FILE_TYPES behavior
+  process.env.REPLACE_FILE_TYPES = 'onlythis';
+  const configReplaced = getSecurityConfig();
+  assert.deepEqual(configReplaced.allowedExtensions, ['onlythis']);
+  delete process.env.REPLACE_FILE_TYPES;
 
   Object.assign(process.env, previous);
   for (const [key, value] of Object.entries(previous)) {

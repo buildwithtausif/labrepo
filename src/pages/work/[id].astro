@@ -12,7 +12,7 @@ if (!userId) {
 const { id } = Astro.params;
 import { loadEnv } from "vite";
 const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
-const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 10) / (1024 * 1024));
+const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '1073741824', 10) / (1024 * 1024));
 ---
 
 <Layout title="Work">
@@ -140,10 +140,15 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
         <div id="preview-document-container" class="hidden w-full h-full overflow-hidden">
           <DocumentIsland client:load />
         </div>
+
+        <div id="preview-video-container" class="hidden w-full h-full">
+        </div>
       </div>
     </div>
 
     <script>
+      import videojs from 'video.js';
+      import 'video.js/dist/video-js.css';
       document.addEventListener('DOMContentLoaded', async () => {
         const api = (window as any).__labrepo_api;
         const showToast = (window as any).__labrepo_showToast;
@@ -180,6 +185,7 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
         const textExts = new Set(['ipynb','py','js','mjs','cjs','jsx','ts','tsx','c','cpp','h','hpp','java','kt','cs','go','rs','swift','php','rb','r','scala','sql','html','css','scss','json','yaml','yml','xml','md','txt','env','sh','bat','ps1','toml','ini','cfg','conf','log','dockerfile','tex','rtf']);
         const imageExts = new Set(['jpg', 'jpeg', 'png', 'webp', 'svg', 'gif']);
         const documentExts = new Set(['pdf', 'docx', 'xlsx', 'xls', 'csv']);
+        const videoExts = new Set(['mp4', 'webm', 'ogg', 'mp3']);
 
         const langMap: Record<string, string> = {
           py: 'python', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
@@ -224,12 +230,13 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
             const isText = textExts.has(file.extension);
             const isImage = imageExts.has(file.extension);
             const isDoc = documentExts.has(file.extension);
-            const isPreviewable = isText || isImage || isDoc;
+            const isVideo = videoExts.has(file.extension);
+            const isPreviewable = isText || isImage || isDoc || isVideo;
             return `
               <div class="store-utility-card animate-fade-in mb-4 px-6 py-4">
                 <div class="flex items-center justify-between flex-wrap gap-4">
                   <div class="flex items-center gap-4 min-w-0" style="flex: 1 1 200px;">
-                    <span class="text-display-lg text-muted">${isImage ? '<i class="bi bi-image"></i>' : isText ? '<i class="bi bi-file-earmark-code"></i>' : isDoc ? '<i class="bi bi-file-earmark-text"></i>' : '<i class="bi bi-box"></i>'}</span>
+                    <span class="text-display-lg text-muted">${isImage ? '<i class="bi bi-image"></i>' : isVideo ? '<i class="bi bi-play-circle"></i>' : isText ? '<i class="bi bi-file-earmark-code"></i>' : isDoc ? '<i class="bi bi-file-earmark-text"></i>' : '<i class="bi bi-box"></i>'}</span>
                     <div class="min-w-0">
                       <div class="text-body-strong truncate">${file.filename}</div>
                       <div class="flex gap-4 items-center text-caption text-muted mt-1 flex-wrap">
@@ -255,10 +262,23 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
 
           list.querySelectorAll('.btn-download-file').forEach((btn: any) => {
             btn.addEventListener('click', async () => {
+              const originalText = btn.innerHTML;
+              btn.disabled = true;
               try {
-                const blob = await api.downloadFile(parseInt(btn.dataset.id));
+                const blob = await api.downloadFile(parseInt(btn.dataset.id), (progress: number, total: number) => {
+                  if (total > 0) {
+                    const percent = Math.round((progress / total) * 100);
+                    btn.innerHTML = `<div class="spinner spinner--sm" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 14px; height: 14px; margin: 0; margin-right: 4px;"></div>${percent}%`;
+                  } else {
+                    btn.innerHTML = `<div class="spinner spinner--sm" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 14px; height: 14px; margin: 0;"></div>`;
+                  }
+                });
                 downloadBlob(blob, btn.dataset.name);
               } catch (err: any) { showToast(err.message, 'error'); }
+              finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+              }
             });
           });
 
@@ -278,6 +298,7 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
         const previewPanel = document.getElementById('preview-panel')!;
         let currentPreviewId: number | null = null;
         let currentObjectUrl: string | null = null;
+        let currentVideoPlayer: any = null;
 
         async function openPreview(fileId: number, filename: string, ext: string) {
           currentPreviewId = fileId;
@@ -290,6 +311,7 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
           const zoomSlot = document.getElementById('preview-zoom-slot-content')!;
           const notebookContainer = document.getElementById('preview-notebook-container')!;
           const documentContainer = document.getElementById('preview-document-container')!;
+          const videoContainer = document.getElementById('preview-video-container')!;
           
           defaultContent.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
           defaultContent.classList.remove('hidden');
@@ -297,6 +319,7 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
           zoomSlot.innerHTML = '';
           notebookContainer.classList.add('hidden');
           documentContainer.classList.add('hidden');
+          videoContainer.classList.add('hidden');
           window.dispatchEvent(new Event('clear-notebook'));
           window.dispatchEvent(new Event('clear-document'));
           
@@ -317,6 +340,49 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
               defaultContent.classList.remove('hidden');
               zoomContainer.classList.add('hidden');
               defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load image</p></div>`;
+            }
+            return;
+          }
+
+          if (videoExts.has(ext)) {
+            try {
+              const blob = await api.downloadFile(fileId);
+              document.getElementById('preview-size')!.textContent = formatSize(blob.size);
+              currentObjectUrl = URL.createObjectURL(blob);
+              
+              defaultContent.classList.add('hidden');
+              zoomContainer.classList.add('hidden');
+              notebookContainer.classList.add('hidden');
+              documentContainer.classList.add('hidden');
+              videoContainer.classList.remove('hidden');
+
+              if (currentVideoPlayer) {
+                currentVideoPlayer.dispose();
+                currentVideoPlayer = null;
+              }
+
+              videoContainer.innerHTML = `
+                <video id="preview-video-player"
+                       class="video-js vjs-labrepo-theme vjs-big-play-centered"
+                       controls preload="auto" style="width: 100%; height: 100%;">
+                </video>`;
+              
+              const videoEl = document.getElementById('preview-video-player');
+              const mimeMap: Record<string, string> = {
+                mp4: 'video/mp4', webm: 'video/webm', ogg: 'video/ogg', mp3: 'audio/mpeg'
+              };
+              
+              currentVideoPlayer = videojs(videoEl, {
+                controls: true,
+                fluid: false,
+                responsive: true,
+                playbackRates: [0.5, 1, 1.25, 1.5, 2],
+                sources: [{ src: currentObjectUrl, type: mimeMap[ext] || 'video/mp4' }]
+              });
+            } catch (err: any) {
+              defaultContent.classList.remove('hidden');
+              videoContainer.classList.add('hidden');
+              defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load video</p></div>`;
             }
             return;
           }
@@ -398,6 +464,10 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
         }
 
         function closePreview() {
+          if (currentVideoPlayer) {
+            currentVideoPlayer.dispose();
+            currentVideoPlayer = null;
+          }
           previewPanel.style.display = 'none';
           document.body.classList.remove('preview-open');
           currentPreviewId = null;
@@ -429,11 +499,25 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
 
         document.getElementById('preview-download')!.addEventListener('click', async () => {
           if (currentPreviewId === null) return;
+          const btn = document.getElementById('preview-download')! as HTMLButtonElement;
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
           try {
-            const blob = await api.downloadFile(currentPreviewId);
+            const blob = await api.downloadFile(currentPreviewId, (progress: number, total: number) => {
+              if (total > 0) {
+                const percent = Math.round((progress / total) * 100);
+                btn.innerHTML = `<div class="spinner spinner--sm" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 16px; height: 16px; margin: 0; margin-right: 6px;"></div>${percent}% (${formatSize(progress)} / ${formatSize(total)})`;
+              } else {
+                btn.innerHTML = `<div class="spinner spinner--sm" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 16px; height: 16px; margin: 0; margin-right: 6px;"></div>Downloading...`;
+              }
+            });
             const filename = document.getElementById('preview-filename')!.textContent || 'file';
             downloadBlob(blob, filename);
           } catch (err: any) { showToast(err.message, 'error'); }
+          finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }
         });
 
         const uploadModal = document.getElementById('upload-modal')!;
@@ -930,6 +1014,61 @@ const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 1
       @keyframes slideUp {
         from { transform: translateY(100%); }
         to { transform: translateY(0); }
+      }
+
+      /* LabreRepo Video.js Theme */
+      .vjs-labrepo-theme {
+        font-family: var(--font-body) !important;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        background-color: #000;
+      }
+      .vjs-labrepo-theme .vjs-big-play-button {
+        background: var(--color-primary);
+        border: none;
+        border-radius: 50%;
+        width: 64px;
+        height: 64px;
+        line-height: 64px;
+        font-size: 28px;
+        transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 8px 28px rgba(197, 27, 27, 0.4);
+      }
+      .vjs-labrepo-theme:hover .vjs-big-play-button {
+        background: var(--color-primary-hover);
+        transform: scale(1.08);
+        box-shadow: 0 12px 36px rgba(197, 27, 27, 0.55);
+      }
+      .vjs-labrepo-theme .vjs-control-bar {
+        background: linear-gradient(to top, rgba(16, 17, 20, 0.92), transparent);
+        height: 42px;
+        padding: 0 8px;
+      }
+      .vjs-labrepo-theme .vjs-play-progress,
+      .vjs-labrepo-theme .vjs-volume-level {
+        background: var(--color-primary);
+      }
+      .vjs-labrepo-theme .vjs-slider {
+        background: rgba(255, 255, 255, 0.15);
+      }
+      .vjs-labrepo-theme .vjs-load-progress {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .vjs-labrepo-theme .vjs-time-control,
+      .vjs-labrepo-theme .vjs-playback-rate .vjs-playback-rate-value {
+        font-family: var(--font-body);
+        font-size: 12px;
+        color: var(--color-ink-muted);
+      }
+      .vjs-labrepo-theme .vjs-menu .vjs-menu-content {
+        background: var(--color-surface-pearl);
+        border: 1px solid var(--color-divider);
+        border-radius: 8px;
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
+      }
+      .vjs-labrepo-theme .vjs-menu li.vjs-selected {
+        background: var(--color-primary);
+        color: white;
       }
     </style>
 </Layout>

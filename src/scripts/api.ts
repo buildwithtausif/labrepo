@@ -164,11 +164,37 @@ export const api = {
 
       xhr.onerror = () => reject(new Error('Upload failed: network error'));
       xhr.ontimeout = () => reject(new Error('Upload timed out'));
-      xhr.timeout = 300000; // 5 min timeout for uploads
+      xhr.timeout = 7200000; // 120 min timeout for uploads
       xhr.send(formData);
     });
   },
-  downloadFile: (id: number) => request(`/files/${id}`),
+  downloadFile: async (id: number, onProgress?: (loaded: number, total: number) => void) => {
+    const token = await getToken();
+    const url = `${API_BASE}/files/${id}`;
+    const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Download failed: ${response.status}`);
+    }
+    const total = parseInt(response.headers.get('content-length') || '0', 10);
+    
+    if (onProgress && response.body) {
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let loaded = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          loaded += value.length;
+          onProgress(loaded, total);
+        }
+      }
+      return new Blob(chunks, { type: response.headers.get('content-type') || '' });
+    }
+    return response.blob();
+  },
   previewFile: (id: number) => request(`/files/${id}/preview`),
   deleteFile: (id: number) => request(`/files/${id}`, { method: 'DELETE' }),
 

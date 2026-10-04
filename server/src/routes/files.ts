@@ -43,6 +43,7 @@ function getContentType(ext: string): string {
     'json': 'application/json', 'yaml': 'text/yaml', 'yml': 'text/yaml',
     'xml': 'application/xml', 'md': 'text/markdown', 'txt': 'text/plain',
     'csv': 'text/csv', 'ipynb': 'application/x-ipynb+json',
+    'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'video/ogg', 'mp3': 'audio/mpeg',
     'env': 'text/plain', 'sh': 'application/x-sh', 'bat': 'application/x-msdownload', 'ps1': 'text/plain',
     'toml': 'text/plain', 'ini': 'text/plain', 'cfg': 'text/plain', 'conf': 'text/plain', 'log': 'text/plain', 'dockerfile': 'text/plain',
     'pdf': 'application/pdf',
@@ -281,6 +282,48 @@ export function createFileRoutes(resolveStorage: StorageResolverFn) {
       'Content-Length': data.length
     });
     res.send(data);
+  });
+
+  // Stream a single video file
+  router.get('/api/files/:id/stream', async (req, res) => {
+    const db = getDb();
+    const [file] = await db
+      .select()
+      .from(files)
+      .where(and(eq(files.id, Number(req.params.id)), eq(files.userId, req.userId)))
+      .limit(1);
+
+    if (!file) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+
+    const storage = await resolveStorage(req.userId);
+    const { data, contentType } = await storage.download(file.storageKey);
+    const total = data.length;
+    const range = req.headers.range;
+
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
+      const chunkSize = (end - start) + 1;
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${total}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': contentType,
+      });
+      res.end(data.subarray(start, end + 1));
+    } else {
+      res.writeHead(200, {
+        'Content-Length': total,
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+      });
+      res.end(data);
+    }
   });
 
   // Preview a file (text-based only)

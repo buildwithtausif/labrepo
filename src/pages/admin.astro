@@ -9,7 +9,7 @@ const ADMIN_USER_ID = env.ADMIN_USER_ID?.trim() || import.meta.env.ADMIN_USER_ID
 const CLERK_ADMIN_USER_ID = env.CLERK_ADMIN_USER_ID?.trim() || import.meta.env.CLERK_ADMIN_USER_ID;
 const isDevBypass = env.ENV?.trim() === 'development';
 
-const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 10) / (1024 * 1024));
+const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '1073741824', 10) / (1024 * 1024));
 const uploadsPerMinute = parseInt(env.UPLOADS_PER_MINUTE || '20', 10);
 const loginRateLimit = parseInt(env.LOGIN_RATE_LIMIT || '10', 10);
 const maxRepositories = parseInt(env.MAX_REPOSITORIES || '50', 10);

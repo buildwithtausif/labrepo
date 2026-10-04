@@ -9,7 +9,7 @@ if (!userId) {
 const { id } = Astro.params;
 import { loadEnv } from "vite";
 const env = loadEnv(import.meta.env.MODE, process.cwd(), "");
-const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '26214400', 10) / (1024 * 1024));
+const maxUploadSizeMb = Math.round(parseInt(env.MAX_UPLOAD_SIZE || '1073741824', 10) / (1024 * 1024));
 ---
 
 <Layout title="Subject">

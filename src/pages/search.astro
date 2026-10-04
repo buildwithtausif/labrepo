@@ -110,10 +110,15 @@ if (!userId) {
         <div id="search-preview-document-container" class="hidden w-full h-full overflow-hidden">
           <DocumentIsland client:only="react" />
         </div>
+
+        <div id="search-preview-video-container" class="hidden w-full h-full">
+        </div>
       </div>
     </div>
 
     <script>
+      import videojs from 'video.js';
+      import 'video.js/dist/video-js.css';
       document.addEventListener("DOMContentLoaded", async () => {
         const api = (window as any).__labrepo_api;
         const showToast = (window as any).__labrepo_showToast;
@@ -123,6 +128,7 @@ if (!userId) {
         const textExts = new Set(['ipynb','py','js','mjs','cjs','jsx','ts','tsx','c','cpp','h','hpp','java','kt','cs','go','rs','swift','php','rb','r','scala','sql','html','css','scss','json','yaml','yml','xml','md','txt','env','sh','bat','ps1','toml','ini','cfg','conf','log','dockerfile','tex','rtf']);
         const imageExts = new Set(['png','jpg','jpeg','gif','webp','svg','ico']);
         const documentExts = new Set(['pdf', 'docx', 'xlsx', 'xls', 'csv']);
+        const videoExts = new Set(['mp4', 'webm', 'ogg', 'mp3']);
         const langMap: Record<string, string> = {
           py: 'python', js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
           c: 'c', h: 'c', hpp: 'cpp', cpp: 'cpp', java: 'java', kt: 'kotlin', cs: 'csharp', go: 'go', rs: 'rust', swift: 'swift', php: 'php', rb: 'ruby', r: 'r', scala: 'scala', sql: 'sql',
@@ -231,12 +237,13 @@ if (!userId) {
                   const isText = textExts.has(file.extension);
                   const isImage = imageExts.has(file.extension);
                   const isDoc = documentExts.has(file.extension);
-                  const isPreviewable = isText || isImage || isDoc;
+                  const isVideo = videoExts.has(file.extension);
+                  const isPreviewable = isText || isImage || isDoc || isVideo;
                   return `
               <div class="search-result store-utility-card animate-fade-in mb-4">
                 <a href="/work/${file.work_id}" class="search-result__details">
                   <div class="flex items-center gap-4 min-w-0">
-                    <span class="text-display-lg text-muted">${isImage ? '<i class="bi bi-image"></i>' : isText ? '<i class="bi bi-file-earmark-code"></i>' : isDoc ? '<i class="bi bi-file-earmark-text"></i>' : '<i class="bi bi-box"></i>'}</span>
+                    <span class="text-display-lg text-muted">${isImage ? '<i class="bi bi-image"></i>' : isVideo ? '<i class="bi bi-play-circle"></i>' : isText ? '<i class="bi bi-file-earmark-code"></i>' : isDoc ? '<i class="bi bi-file-earmark-text"></i>' : '<i class="bi bi-box"></i>'}</span>
                     <div class="min-w-0">
                       <div class="text-body-strong text-ink">${file.filename}</div>
                       <div class="text-caption text-muted truncate">
@@ -289,10 +296,23 @@ if (!userId) {
           });
           container.querySelectorAll(".btn-download-file").forEach((button: any) => {
             button.addEventListener("click", async () => {
+              const originalText = button.innerHTML;
+              button.disabled = true;
               try {
-                const blob = await api.downloadFile(parseInt(button.dataset.id));
+                const blob = await api.downloadFile(parseInt(button.dataset.id), (progress: number, total: number) => {
+                  if (total > 0) {
+                    const percent = Math.round((progress / total) * 100);
+                    button.innerHTML = `<div class="spinner spinner--sm" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 14px; height: 14px; margin: 0; margin-right: 4px;"></div>${percent}%`;
+                  } else {
+                    button.innerHTML = `<div class="spinner spinner--sm" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 14px; height: 14px; margin: 0;"></div>`;
+                  }
+                });
                 downloadBlob(blob, button.dataset.name);
               } catch (err: any) { showToast(err.message, 'error'); }
+              finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+              }
             });
           });
           container.querySelectorAll(".btn-delete-file").forEach((button: any) => {
@@ -322,6 +342,7 @@ if (!userId) {
           const zoomSlot = document.getElementById("search-preview-zoom-slot-content")!;
           const notebookContainer = document.getElementById("search-preview-notebook-container")!;
           const documentContainer = document.getElementById("search-preview-document-container")!;
+          const videoContainer = document.getElementById("search-preview-video-container")!;
           
           defaultContent.innerHTML = '<div class="empty-state"><div class="spinner"></div></div>';
           defaultContent.classList.remove('hidden');
@@ -329,6 +350,7 @@ if (!userId) {
           zoomSlot.innerHTML = '';
           notebookContainer.classList.add('hidden');
           documentContainer.classList.add('hidden');
+          videoContainer.classList.add('hidden');
           window.dispatchEvent(new Event('clear-notebook'));
           window.dispatchEvent(new Event('clear-document'));
           
@@ -349,6 +371,49 @@ if (!userId) {
               defaultContent.classList.remove('hidden');
               zoomContainer.classList.add('hidden');
               defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load image</p></div>`;
+            }
+            return;
+          }
+
+          if (videoExts.has(extension)) {
+            try {
+              const blob = await api.downloadFile(fileId);
+              document.getElementById("search-preview-size")!.textContent = formatSize(blob.size);
+              currentObjectUrl = URL.createObjectURL(blob);
+              
+              defaultContent.classList.add('hidden');
+              zoomContainer.classList.add('hidden');
+              notebookContainer.classList.add('hidden');
+              documentContainer.classList.add('hidden');
+              videoContainer.classList.remove('hidden');
+
+              if ((window as any).currentSearchVideoPlayer) {
+                (window as any).currentSearchVideoPlayer.dispose();
+                (window as any).currentSearchVideoPlayer = null;
+              }
+
+              videoContainer.innerHTML = `
+                <video id="search-preview-video-player"
+                       class="video-js vjs-labrepo-theme vjs-big-play-centered"
+                       controls preload="auto" style="width: 100%; height: 100%;">
+                </video>`;
+              
+              const videoEl = document.getElementById('search-preview-video-player');
+              const mimeMap: Record<string, string> = {
+                mp4: 'video/mp4', webm: 'video/webm', ogg: 'video/ogg', mp3: 'audio/mpeg'
+              };
+              
+              (window as any).currentSearchVideoPlayer = videojs(videoEl, {
+                controls: true,
+                fluid: false,
+                responsive: true,
+                playbackRates: [0.5, 1, 1.25, 1.5, 2],
+                sources: [{ src: currentObjectUrl, type: mimeMap[extension] || 'video/mp4' }]
+              });
+            } catch (err: any) {
+              defaultContent.classList.remove('hidden');
+              videoContainer.classList.add('hidden');
+              defaultContent.innerHTML = `<div class="empty-state"><p style="color: #ff3b30;">Failed to load media</p></div>`;
             }
             return;
           }
@@ -423,6 +488,10 @@ if (!userId) {
         }
 
         function closePreview() { 
+          if ((window as any).currentSearchVideoPlayer) {
+            (window as any).currentSearchVideoPlayer.dispose();
+            (window as any).currentSearchVideoPlayer = null;
+          }
           previewPanel.style.display = "none"; 
           currentPreviewId = null; 
           if (currentObjectUrl) {
@@ -451,8 +520,24 @@ if (!userId) {
         
         document.getElementById("search-preview-download")!.addEventListener("click", async () => {
           if (currentPreviewId === null) return;
-          try { downloadBlob(await api.downloadFile(currentPreviewId), document.getElementById("search-preview-filename")!.textContent || "file"); }
-          catch (error: any) { showToast(error.message, "error"); }
+          const btn = document.getElementById("search-preview-download")! as HTMLButtonElement;
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
+          try {
+            const blob = await api.downloadFile(currentPreviewId, (progress: number, total: number) => {
+              if (total > 0) {
+                const percent = Math.round((progress / total) * 100);
+                btn.innerHTML = `<div class="spinner spinner--sm" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 16px; height: 16px; margin: 0; margin-right: 6px;"></div>${percent}% (${formatSize(progress)} / ${formatSize(total)})`;
+              } else {
+                btn.innerHTML = `<div class="spinner spinner--sm" style="display:inline-block; vertical-align: middle; border-color: currentColor; border-top-color: transparent; border-width: 2px; width: 16px; height: 16px; margin: 0; margin-right: 6px;"></div>Downloading...`;
+              }
+            });
+            downloadBlob(blob, document.getElementById("search-preview-filename")!.textContent || "file");
+          } catch (error: any) { showToast(error.message, "error"); }
+          finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }
         });
       });
     </script>
